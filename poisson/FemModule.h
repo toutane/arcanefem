@@ -261,6 +261,8 @@ class FemModule
   void _saveTimeInCSV();
   void _saveNoBuildTimeInCSV();
   void _benchBuildRow();
+  void _dispatchBilinearOperatorAssembly();
+  void _dispatchLinearOperatorAssembly();
   Real _readTimeFromJson(String main_time, String sub_time);
   FixedMatrix<3, 3> _computeElementMatrixTRIA3(Cell cell);
   FixedMatrix<4, 4> _computeElementMatrixTETRA4(Cell cell);

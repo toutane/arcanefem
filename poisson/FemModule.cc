@@ -380,160 +380,284 @@ _handleFlags()
 }
 
 /*---------------------------------------------------------------------------*/
+/**
+ * @brief Performs a stationary solve for the FEM system.
+ */
 /*---------------------------------------------------------------------------*/
 
 void FemModule::
 _doStationarySolve()
 {
-  Timer::Action timer_action(m_time_stats, "StationarySolve");
-
-  // # get material parameters
+  Timer::Action timer_action(m_time_stats, "StationarySolver");
   _getMaterialParameters();
+  _dispatchBilinearOperatorAssembly();
+  _dispatchLinearOperatorAssembly();
+  _solve();
+  _checkResultFile();
 
-  // Assemble the FEM bilinear operator (LHS - matrix A)
-  if (m_use_legacy) {
-    m_linear_system.clearValues();
-    if (options()->meshType == "TETRA4")
-      _assembleBilinearOperatorTETRA4();
-    else if (options()->meshType == "TRIA3")
-      _assembleBilinearOperatorTRIA3();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleLegacyBilinearOperatorTria3");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        m_linear_system.clearValues();
-        if (options()->meshType == "TETRA4")
-          _assembleBilinearOperatorTETRA4();
-        else if (options()->meshType == "TRIA3")
-          _assembleBilinearOperatorTRIA3();
-      }
-    }
-  }
+    // if (m_use_legacy) {
+    //   m_linear_system.clearValues();
+    //   if (options()->meshType == "TETRA4")
+    //     _assembleBilinearOperatorTETRA4();
+    //   else if (options()->meshType == "TRIA3")
+    //     _assembleBilinearOperatorTRIA3();
+    //   if (m_cache_warming != 1) {
+    //     m_time_stats->resetStats("AssembleLegacyBilinearOperatorTria3");
+    //     for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+    //       m_linear_system.clearValues();
+    //       if (options()->meshType == "TETRA4")
+    //         _assembleBilinearOperatorTETRA4();
+    //       else if (options()->meshType == "TRIA3")
+    //         _assembleBilinearOperatorTRIA3();
+    //     }
+    //   }
+    // }
 
-  if (m_use_csr) {
-    m_linear_system.clearValues();
-    if (options()->meshType == "TRIA3")
-      _assembleCsrBilinearOperatorTRIA3();
-    else if (options()->meshType == "TETRA4")
-      _assembleCsrBilinearOperatorTETRA4();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleCsrBilinearOperatorTria3");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        m_linear_system.clearValues();
-        if (options()->meshType == "TRIA3")
-          _assembleCsrBilinearOperatorTRIA3();
-        else if (options()->meshType == "TETRA4")
-          _assembleCsrBilinearOperatorTETRA4();
-      }
-    }
-    m_csr_matrix.translateToLinearSystem(m_linear_system);
-  }
+  //   if (m_use_csr) {
+  //     m_linear_system.clearValues();
+  //     if (options()->meshType == "TRIA3")
+  //       _assembleCsrBilinearOperatorTRIA3();
+  //     else if (options()->meshType == "TETRA4")
+  //       _assembleCsrBilinearOperatorTETRA4();
+  //     if (m_cache_warming != 1) {
+  //       m_time_stats->resetStats("AssembleCsrBilinearOperatorTria3");
+  //       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+  //         m_linear_system.clearValues();
+  //         if (options()->meshType == "TRIA3")
+  //           _assembleCsrBilinearOperatorTRIA3();
+  //         else if (options()->meshType == "TETRA4")
+  //           _assembleCsrBilinearOperatorTETRA4();
+  //       }
+  //     }
+  //     m_csr_matrix.translateToLinearSystem(m_linear_system);
+  //   }
 
+  // #ifdef USE_CUSPARSE_ADD
+  //   if (m_use_cusparse_add) {
+  //     _assembleCusparseBilinearOperatorTRIA3();
+  //     if (m_cache_warming != 1) {
+  //       m_time_stats->resetStats("AssembleCusparseBilinearOperator");
+  //       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+  //         _assembleCusparseBilinearOperatorTRIA3();
+  //       }
+  //     }
+  //   }
+
+  // #endif
+  //   if (m_use_coo) {
+  //     m_linear_system.clearValues();
+  //     _assembleCooBilinearOperatorTRIA3();
+  //     if (m_cache_warming != 1) {
+  //       m_time_stats->resetStats("AssembleCooBilinearOperatorTria3");
+  //       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+  //         m_linear_system.clearValues();
+  //         _assembleCooBilinearOperatorTRIA3();
+  //       }
+  //     }
+  //     m_coo_matrix.translateToLinearSystem(m_linear_system);
+  //   }
+  //   if (m_use_coo_sort) {
+  //     m_linear_system.clearValues();
+  //     _assembleCooSortBilinearOperatorTRIA3();
+  //     if (m_cache_warming != 1) {
+  //       m_time_stats->resetStats("AssembleCooSortBilinearOperatorTria3");
+  //       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+  //         m_linear_system.clearValues();
+  //         _assembleCooSortBilinearOperatorTRIA3();
+  //       }
+  //     }
+  //     m_coo_matrix.translateToLinearSystem(m_linear_system);
+  //   }
+  // #ifdef USE_COO_GPU
+  //   for (i = 0; i < 3; i++) {
+  //     m_linear_system.clearValues();
+  //     _assembleCooGPUBilinearOperatorTRIA3();
+  //   }
+  //   m_coo_matrix.translateToLinearSystem(m_linear_system);
+  // #endif
+
+  // #ifdef ARCANE_HAS_ACCELERATOR
+  //   if (m_use_csr_gpu) {
+  //     m_linear_system.clearValues();
+  //     _assembleCsrGPUBilinearOperatorTRIA3();
+  //     if (m_cache_warming != 1) {
+  //       m_time_stats->resetStats("AssembleCsrGpuBilinearOperatorTria3");
+  //       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+  //         m_linear_system.clearValues();
+  //         _assembleCsrGPUBilinearOperatorTRIA3();
+  //       }
+  //     }
+  //      m_csr_matrix.translateToLinearSystem(m_linear_system);
+  //   }
+  // #endif
+  //   if (m_use_nodewise_csr) {
+  //     m_linear_system.clearValues();
+  //     _assembleNodeWiseCsrBilinearOperatorTria3();
+  //     if (m_cache_warming != 1) {
+  //       m_time_stats->resetStats("AssembleNodeWiseCsrBilinearOperatorTria3");
+  //       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+  //         m_linear_system.clearValues();
+  //         _assembleNodeWiseCsrBilinearOperatorTria3();
+  //       }
+  //     }
+  //     m_csr_matrix.translateToLinearSystem(m_linear_system);
+  //   }
+  //   if (m_use_buildless_csr) {
+  //     m_linear_system.clearValues();
+  //     if (options()->meshType == "TRIA3")
+  //       _assembleBuildLessCsrBilinearOperatorTria3();
+  //     if (options()->meshType == "TETRA4")
+  //       _assembleBuildLessCsrBilinearOperatorTetra4();
+  //     if (m_cache_warming != 1) {
+  //       m_time_stats->resetStats("AssembleBuildLessCsrBilinearOperatorTria3");
+  //       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+  //         m_linear_system.clearValues();
+  //         if (options()->meshType == "TRIA3")
+  //           _assembleBuildLessCsrBilinearOperatorTria3();
+  //         if (options()->meshType == "TETRA4")
+  //         _assembleBuildLessCsrBilinearOperatorTetra4();
+  //       }
+  //     }
+  //     m_csr_matrix.translateToLinearSystem(m_linear_system);
+  //   }
+
+  //   // Assemble the FEM linear operator (RHS - vector b)
+  //   if (m_use_buildless_csr || m_use_csr_gpu || m_use_nodewise_csr || m_use_csr) {
+  //     m_linear_system.clearValues();
+  //     _assembleCsrGpuLinearOperator();
+  //     //_assembleCsrLinearOperator();
+  //     m_csr_matrix.translateToLinearSystem(m_linear_system);
+  //     _translateRhs();
+  //   }
+  //   else{
+  //     _assembleLinearOperator();
+  //   }
+
+  //   _solve();
+
+  //   // Check results
+  //   _checkResultFile();
+}
+
+void FemModule::_dispatchBilinearOperatorAssembly()
+{
+  struct AssemblyOption
+  {
+    bool FemModule::*use_option;
+    const std::string& tria3_name;
+    std::function<void(FemModule*)> assembly_function_tria3;
+    const std::string& tetra4_name;
+    std::function<void(FemModule*)> assembly_function_tetra4;
+    std::function<void(FemModule*)> post_assembly_function;
+  };
+
+  std::vector<AssemblyOption> assembly_options = {
+    { &FemModule::m_use_legacy,
+      "AssembleLegacyBilinearOperatorTria3",
+      &FemModule::_assembleBilinearOperatorTRIA3,
+      "AssembleLegacyBilinearOperatorTetra4",
+      &FemModule::_assembleBilinearOperatorTETRA4,
+      nullptr },
 #ifdef USE_CUSPARSE_ADD
-  if (m_use_cusparse_add) {
-    _assembleCusparseBilinearOperatorTRIA3();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleCusparseBilinearOperator");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        _assembleCusparseBilinearOperatorTRIA3();
-      }
-    }
-  }
-
+    { &FemModule::m_use_cusparse_add,
+      "AssembleCusparseBilinearOperatorTria3",
+      &FemModule::_assembleCusparseBilinearOperatorTRIA3,
+      "AssembleCusparseBilinearOperatorTetra4",
+      &FemModule::_assemblerCusparseBilinearOperatorTETRA4,
+      nullptr },
 #endif
-  if (m_use_coo) {
-    m_linear_system.clearValues();
-    _assembleCooBilinearOperatorTRIA3();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleCooBilinearOperatorTria3");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        m_linear_system.clearValues();
-        _assembleCooBilinearOperatorTRIA3();
-      }
-    }
-    m_coo_matrix.translateToLinearSystem(m_linear_system);
-  }
-  if (m_use_coo_sort) {
-    m_linear_system.clearValues();
-    _assembleCooSortBilinearOperatorTRIA3();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleCooSortBilinearOperatorTria3");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        m_linear_system.clearValues();
-        _assembleCooSortBilinearOperatorTRIA3();
-      }
-    }
-    m_coo_matrix.translateToLinearSystem(m_linear_system);
-  }
+    { &FemModule::m_use_coo,
+      "AssembleCooBilinearOperatorTria3",
+      &FemModule::_assembleCooBilinearOperatorTRIA3,
+      "AssembleCooBilinearOperatorTetra4",
+      nullptr,
+      [this](FemModule* module) { m_coo_matrix.translateToLinearSystem(m_linear_system); } },
+    { &FemModule::m_use_coo_sort,
+      "AssembleCooSortBilinearOperatorTria3",
+      &FemModule::_assembleCooSortBilinearOperatorTRIA3,
+      "AssembleCooSortBilinearOperatorTetra4",
+      nullptr,
+      [this](FemModule* module) { m_coo_matrix.translateToLinearSystem(m_linear_system); } },
 #ifdef USE_COO_GPU
-  for (i = 0; i < 3; i++) {
-    m_linear_system.clearValues();
-    _assembleCooGPUBilinearOperatorTRIA3();
-  }
-  m_coo_matrix.translateToLinearSystem(m_linear_system);
+    { true,
+      "AssembleCooGPUBilinearOperatorTria3",
+      &FemModule::_assembleCooGPUBilinearOperatorTRIA3,
+      "AssembleCooGPUBilinearOperatorTetra4",
+      nullptr,
+      [this](FemModule* module) { m_coo_matrix.translateToLinearSystem(m_linear_system); } },
 #endif
-
+    { &FemModule::m_use_csr,
+      "AssembleCsrBilinearOperatorTria3",
+      &FemModule::_assembleCsrBilinearOperatorTRIA3,
+      "AssembleCsrBilinearOperatorTetra4",
+      &FemModule::_assembleCsrBilinearOperatorTETRA4,
+      [this](FemModule* module) { m_csr_matrix.translateToLinearSystem(m_linear_system); } },
 #ifdef ARCANE_HAS_ACCELERATOR
-  if (m_use_csr_gpu) {
-    m_linear_system.clearValues();
-    _assembleCsrGPUBilinearOperatorTRIA3();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleCsrGpuBilinearOperatorTria3");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        m_linear_system.clearValues();
-        _assembleCsrGPUBilinearOperatorTRIA3();
-      }
-    }
-     m_csr_matrix.translateToLinearSystem(m_linear_system);
-  }
+    { &FemModule::m_use_csr_gpu,
+      "AssembleCsrGpuBilinearOperatorTria3",
+      &FemModule::_assembleCsrGPUBilinearOperatorTRIA3,
+      "AssembleCsrGpuBilinearOperatorTetra4",
+      nullptr,
+      [this](FemModule* module) { m_csr_matrix.translateToLinearSystem(m_linear_system); } },
 #endif
-  if (m_use_nodewise_csr) {
-    m_linear_system.clearValues();
-    _assembleNodeWiseCsrBilinearOperatorTria3();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleNodeWiseCsrBilinearOperatorTria3");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        m_linear_system.clearValues();
-        _assembleNodeWiseCsrBilinearOperatorTria3();
-      }
-    }
-    m_csr_matrix.translateToLinearSystem(m_linear_system);
-  }
-  if (m_use_buildless_csr) {
-    m_linear_system.clearValues();
-    if (options()->meshType == "TRIA3")
-      _assembleBuildLessCsrBilinearOperatorTria3();
-    if (options()->meshType == "TETRA4")
-      _assembleBuildLessCsrBilinearOperatorTetra4();
-    if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleBuildLessCsrBilinearOperatorTria3");
-      for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
-        m_linear_system.clearValues();
-        if (options()->meshType == "TRIA3")
-          _assembleBuildLessCsrBilinearOperatorTria3();
-        if (options()->meshType == "TETRA4")
-        _assembleBuildLessCsrBilinearOperatorTetra4();
-      }
-    }
-    m_csr_matrix.translateToLinearSystem(m_linear_system);
-  }
+    { &FemModule::m_use_nodewise_csr,
+      "AssembleNodeWiseCsrBilinearOperatorTria3",
+      &FemModule::_assembleNodeWiseCsrBilinearOperatorTria3,
+      "AssembleNodeWiseCsrBilinearOperatorTetra4",
+      nullptr,
+      [this](FemModule* module) { m_csr_matrix.translateToLinearSystem(m_linear_system); } },
+    { &FemModule::m_use_buildless_csr,
+      "AssembleBuildLessCsrBilinearOperatorTria3",
+      &FemModule::_assembleBuildLessCsrBilinearOperatorTria3,
+      "AssembleBuildLessCsrBilinearOperatorTetra4",
+      &FemModule::_assembleBuildLessCsrBilinearOperatorTetra4,
+      [this](FemModule* module) { m_csr_matrix.translateToLinearSystem(m_linear_system); } },
+  };
 
-  // Assemble the FEM linear operator (RHS - vector b)
+  for (const auto& option : assembly_options) {
+    if (this->*option.use_option) {
+      bool is_tria3 = options()->meshType == "TRIA3";
+
+      std::function<void(FemModule*)> assembly_function = is_tria3 ? option.assembly_function_tria3 : option.assembly_function_tetra4;
+      std::string assembly_name = is_tria3 ? option.tria3_name : option.tetra4_name;
+
+      if (assembly_function == nullptr) {
+        ARCANE_FATAL("Assembly method {0} not implemented !", assembly_name);
+        return;
+      }
+
+      info() << "Using " << assembly_name << " assembly method";
+      m_linear_system.clearValues();
+      assembly_function(this);
+
+      if (m_cache_warming != 1) {
+        m_time_stats->resetStats(assembly_name);
+        for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+          m_linear_system.clearValues();
+          assembly_function(this);
+        }
+      }
+
+      if (option.post_assembly_function != nullptr) {
+        option.post_assembly_function(this);
+      }
+
+      return;
+    }
+  }
+};
+
+void FemModule::_dispatchLinearOperatorAssembly() {
   if (m_use_buildless_csr || m_use_csr_gpu || m_use_nodewise_csr || m_use_csr) {
     m_linear_system.clearValues();
     _assembleCsrGpuLinearOperator();
-    //_assembleCsrLinearOperator();
     m_csr_matrix.translateToLinearSystem(m_linear_system);
     _translateRhs();
   }
-  else{
+  else {
     _assembleLinearOperator();
   }
-
-  _solve();
-
-  // Check results
-  _checkResultFile();
-}
+};
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
