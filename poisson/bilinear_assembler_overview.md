@@ -9,5 +9,5 @@
 | COO Sort | 2D | CPU |
 | COO GPU | 2D | GPU |
 | NodeWise CSR | 2D | CPU |
-| BuildLess CSR | 2D / 3D | CPU |
-| CSR GPU | 2D | GPU |
+| BuildLess CSR | 2D / 3D | GPU |
+| CSR GPU | 2D | GPU (atomic ope)|
