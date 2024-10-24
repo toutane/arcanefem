@@ -13,51 +13,141 @@
 /*---------------------------------------------------------------------------*/
 
 #include "FemModule.h"
+#include "arcane/accelerator/Scan.h"
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+SmallSpan<uint> doInclusiveSum(const NumArray<uint, MDDim1>& nb_neighbor_arr, Int32 size, RunQueue* queue)
+{
+  SmallSpan<const uint> input = nb_neighbor_arr.to1DSmallSpan();
+
+  NumArray<uint, MDDim1> tmp_output;
+
+  tmp_output.resize(size);
+
+  SmallSpan<uint> output = tmp_output.to1DSmallSpan();
+
+  Accelerator::Scanner<uint> scanner;
+
+  scanner.inclusiveSum(queue, input, output);
+
+  return output;
+}
 
 void FemModule::
 _buildMatrixCsrGPU()
 {
-  auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
+  Int8 mesh_dim = mesh()->dimension();
 
-  Int32 nnz = (options()->meshType == "TRIA3" ? nbFace() : nbEdge() * 2) + nbNode();
+  if (mesh_dim != 2 && mesh_dim != 3)
+    ARCANE_THROW(NotSupportedException, "Only mesh of dimension 2 or 3 are supported");
 
-  m_csr_matrix.initialize(m_dof_family, nnz, nbNode());
+  Int64 nb_edge = (mesh_dim == 2) ? nbFace() : m_nb_edge;
+  Int32 nb_non_zero = nb_edge * 2 + nbNode();
+  m_csr_matrix.initialize(m_dof_family, nb_non_zero, nbNode());
 
-  //We iterate through the node, and we do not sort anymore : we assume the nodes ID are sorted, and we will iterate throught the column to avoid making < and > comparison
-  if (options()->meshType == "TRIA3") {
-  ENUMERATE_NODE (inode, allNodes()) {
-    Node node = *inode;
-    Int32 node_dof_id = node_dof.dofId(node, 0);
-    ItemLocalIdT<DoF> diagonal_entry(node_dof_id);
+  RunQueue* queue = acceleratorMng()->defaultQueue();
+  auto command = makeCommand(queue);
 
-    m_csr_matrix.setCoordinates(diagonal_entry, diagonal_entry);
+  auto inout_m_matrix_row = viewInOut(command, m_csr_matrix.m_matrix_row);
+  auto inout_m_matrix_column = viewInOut(command, m_csr_matrix.m_matrix_column);
 
-    for (Face face : node.faces()) {
-      if (face.nodeId(0) == node.localId())
-        m_csr_matrix.setCoordinates(diagonal_entry, node_dof.dofId(face.nodeId(1), 0));
-      else
-        m_csr_matrix.setCoordinates(diagonal_entry, node_dof.dofId(face.nodeId(0), 0));
+  if (mesh_dim == 2) {
+    info() << "_buildMatrixCsrGPU for 2D mesh with edge-node connectivity";
+
+    auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
+
+    ENUMERATE_NODE (inode, allNodes()) {
+      Node node = *inode;
+      Int32 node_dof_id = node_dof.dofId(node, 0);
+      ItemLocalIdT<DoF> diagonal_entry(node_dof_id);
+
+      m_csr_matrix.setCoordinates(diagonal_entry, diagonal_entry);
+
+      for (Face face : node.faces()) {
+        if (face.nodeId(0) == node.localId())
+          m_csr_matrix.setCoordinates(diagonal_entry, node_dof.dofId(face.nodeId(1), 0));
+        else
+          m_csr_matrix.setCoordinates(diagonal_entry, node_dof.dofId(face.nodeId(0), 0));
+      }
     }
   }
-  }
-  else if (options()->meshType == "TETRA4") {
-  ENUMERATE_NODE (inode, allNodes()) {
-    Node node = *inode;
-    Int32 node_dof_id = node_dof.dofId(node, 0);
-    ItemLocalIdT<DoF> diagonal_entry(node_dof_id);
+  else {
+    bool is_using_node_node_cnv = !options()->createEdges();
 
-    m_csr_matrix.setCoordinates(diagonal_entry, diagonal_entry);
+    if (is_using_node_node_cnv)
+      info() << "_buildMatrixCsrGPU for 3D mesh with node-node connectivity";
+    else
+      info() << "_buildMatrixCsrGPU for 3D mesh with node-edge connectivity";
 
-    for (Edge edge : node.edges()) {
-      if (edge.nodeId(0) == node.localId())
-        m_csr_matrix.setCoordinates(diagonal_entry, node_dof.dofId(edge.nodeId(1), 0));
-      else
-        m_csr_matrix.setCoordinates(diagonal_entry, node_dof.dofId(edge.nodeId(0), 0));
+    NumArray<uint, MDDim1> nb_neighbor_arr;
+    nb_neighbor_arr.resize(nbNode() + 1);
+    nb_neighbor_arr[0] = 0;
+    auto inout_nb_neighbor_arr = viewInOut(command, nb_neighbor_arr);
+
+    if (is_using_node_node_cnv) {
+      auto* connectivity_ptr = m_node_node_via_edge_connectivity.get();
+      ARCANE_CHECK_POINTER(connectivity_ptr);
+      IndexedNodeNodeConnectivityView nn_cv = connectivity_ptr->view();
+
+      Timer::Action timer_csr_gpu_fill_array(m_time_stats, "Filling neighbors array nn_cnv");
+      command << RUNCOMMAND_ENUMERATE(Node, node_idx, allNodes())
+      {
+        inout_nb_neighbor_arr[node_idx + 1] = nn_cv.nbNode(node_idx) + 1;
+        // We add 1 to count the node's relation with itself.
+      };
+
+      Timer::Action timer_csr_gpu_sum(m_time_stats, "Do inclusive sum nn_cv");
+      auto output = doInclusiveSum(nb_neighbor_arr, nbNode() + 1, queue);
+
+      Timer::Action timer_csr_gpu_3(m_time_stats, "Filling matrix row and column");
+      command << RUNCOMMAND_ENUMERATE(Node, node_idx, allNodes())
+      {
+        Int32 offset = output[node_idx];
+
+        inout_m_matrix_row[node_idx] = offset;
+
+        for (auto neighbor_idx : nn_cv.nodeIds(node_idx)) {
+          inout_m_matrix_column[offset] = neighbor_idx;
+          ++offset;
+        }
+
+        inout_m_matrix_column[offset] = node_idx;
+      };
     }
-  }
+    else {
+      UnstructuredMeshConnectivityView m_connectivity_view;
+      m_connectivity_view.setMesh(mesh());
+      auto ne_cv = m_connectivity_view.nodeEdge();
+      auto en_cv = m_connectivity_view.edgeNode();
+
+      Timer::Action timer_csr_gpu_fill_array(m_time_stats, "Filling neighbors array ne_cv");
+      command << RUNCOMMAND_ENUMERATE(Node, node_idx, allNodes())
+      {
+        inout_nb_neighbor_arr[node_idx + 1] = ne_cv.nbEdge(node_idx) + 1;
+        // We add 1 to count the node's relation with itself.
+      };
+
+      Timer::Action timer_csr_gpu_sum(m_time_stats, "Do inclusive sum ne_cnv");
+      auto output = doInclusiveSum(nb_neighbor_arr, nbNode() + 1, queue);
+
+      Timer::Action timer_csr_gpu_3(m_time_stats, "Filling matrix row and column");
+      command << RUNCOMMAND_ENUMERATE(Node, node_idx, allNodes())
+      {
+        Int32 offset = output[node_idx];
+
+        inout_m_matrix_row[node_idx] = offset;
+
+        for (auto edge : ne_cv.edges(node_idx)) {
+          auto nodes = en_cv.nodes(edge);
+          auto other_node = nodes[1] == node_idx ? nodes[2] : nodes[1];
+          inout_m_matrix_column[offset] = other_node;
+          ++offset;
+        }
+
+        inout_m_matrix_column[offset] = node_idx;
+      };
+    }
   }
 }
 

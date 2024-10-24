@@ -130,6 +130,7 @@ void FemModule::_buildMatrixCooGPU()
       nb_neighbor_arr.resize(nbNode());
       auto inout_nb_neighbor_arr = viewInOut(command, nb_neighbor_arr);
 
+      Timer::Action timer_coo_gpu_1(m_time_stats, "Filling neighbors array");
       command << RUNCOMMAND_ENUMERATE(Node, node_idx, allNodes())
       {
         inout_nb_neighbor_arr[node_idx] = nn_cv.nbNode(node_idx) + 1;
@@ -137,6 +138,7 @@ void FemModule::_buildMatrixCooGPU()
       };
 
       // Do the exclusive cumulative sum of the neighbors array
+      Timer::Action timer_coo_gpu_2(m_time_stats, "Do exclusive sum");
       SmallSpan<uint> input = nb_neighbor_arr.to1DSmallSpan();
       NumArray<uint, MDDim1> tmp_output;
       tmp_output.resize(nbNode());
@@ -145,6 +147,7 @@ void FemModule::_buildMatrixCooGPU()
       scanner.exclusiveSum(queue, input, output);
 
       // Fill the neighbors relation (including node with itself) into the matrix
+      Timer::Action timer_goo_gpu_3(m_time_stats, "Filling matrix row and column");
       command << RUNCOMMAND_ENUMERATE(Node, node_idx, allNodes())
       {
         Int32 offset = output[node_idx];
@@ -224,7 +227,7 @@ _assembleCooGPUBilinearOperatorTRIA3()
   {
     Real K_e[9] = { 0 };
     {
-        _computeElementMatrixTRIA3GPU(icell, cnc, in_node_coord, K_e);
+      _computeElementMatrixTRIA3GPU(icell, cnc, in_node_coord, K_e);
     }
 
     Int32 n1_index = 0;
@@ -256,20 +259,59 @@ _assembleCooGPUBilinearOperatorTRIA3()
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
+ARCCORE_HOST_DEVICE Int32 findIndexGpu(Int32 row, Int32 col, const auto& row_arr, const auto& col_arr, Int32 row_length)
+{
+  Int32 begin = 0;
+  Int32 end = row_length - 1;
+  Int32 i = -1; // Default value in case the index is not found
+
+  // Binary search to find the first occurrence of `row`
+  while (begin <= end) {
+    Int32 mid = begin + (end - begin) / 2;
+
+    if (row == row_arr(mid)) {
+      // Move back to the first occurrence of the row
+      while (mid > 0 && row_arr(mid - 1) == row) {
+        mid--;
+      }
+      i = mid;
+      break;
+    }
+
+    if (row > row_arr(mid)) {
+      begin = mid + 1;
+    }
+    else {
+      end = mid - 1;
+    }
+  }
+
+  // If no occurrence of the row was found, return -1
+  if (i == -1) {
+    return -1;
+  }
+
+  // Search for the matching column in the found row's block
+  while (i < row_length && row_arr(i) == row) {
+    if (col_arr(i) == col) {
+      return i;
+    }
+    i++;
+  }
+
+  // If no matching column is found, return -1
+  return -1;
+}
+
 void FemModule::
-_assembleCooGPUBilinearOperatorTETRA4() {
+_assembleCooGPUBilinearOperatorTETRA4()
+{
   info() << "Assembling COO GPU Bilinear Operator for TETRA4 elements";
 
-  if (m_use_coo_gpu)
-    Timer::Action timer_coo_gpu_bili(m_time_stats, "AssembleCooGpuBilinearOperatorTetra4");
-  else // m_use_coo_sort_gpu
-    Timer::Action timer_coo_sort_gpu_bili(m_time_stats, "AssembleCooSortGpuBilinearOperatorTetra4");
+  Timer::Action timer_coo_gpu_bili(m_time_stats, m_use_coo_gpu ? "AssembleCooGpuBilinearOperatorTetra4" : "AssembleCooSortGpuBilinearOperatorTetra4");
 
   {
-    if (m_use_coo_gpu)
-      Timer::Action timer_coo_gpu_build(m_time_stats, "BuildMatrixCooGpu");
-    else // m_use_coo_sort_gpu
-      Timer::Action timer_coo_sort_gpu_build(m_time_stats, "BuildMatrixCooSortGpu");
+    Timer::Action timer_coo_gpu_build(m_time_stats, m_use_coo_gpu ? "BuildMatrixCooGpu" : "BuildMatrixCooSortGpu");
     _buildMatrixCooGPU();
   }
 
@@ -289,36 +331,71 @@ _assembleCooGPUBilinearOperatorTETRA4() {
   Arcane::ItemGenericInfoListView nodes_infos(this->mesh()->nodeFamily());
   Arcane::ItemGenericInfoListView cells_infos(this->mesh()->cellFamily());
 
-  command << RUNCOMMAND_ENUMERATE(Cell, icell, allCells())
-  {
-    Real K_e[16] = { 0 };
+  Int8 mesh_dim = mesh()->dimension();
+  if (mesh()->dimension() == 3 && !options()->createEdges()) { // 3D mesh with node-node connectivity (m_matrix_row is sorted so we can do binary search on it)
+    Timer::Action timer_add_compute(m_time_stats, "CooGpuAddComputeLoop");
+    command << RUNCOMMAND_ENUMERATE(Cell, icell, allCells())
     {
-        _computeElementMatrixTETRA4GPU(icell, cnc, in_node_coord, K_e);
-    }
+      Real K_e[16] = { 0 };
+      _computeElementMatrixTETRA4GPU(icell, cnc, in_node_coord, K_e);
 
-    Int32 n1_index = 0;
-    for (NodeLocalId node1 : cnc.nodes(icell)) {
-      Int32 n2_index = 0;
-      for (NodeLocalId node2 : cnc.nodes(icell)) {
-        if (nodes_infos.isOwn(node1)) {
-          Real v = K_e[n1_index * 4 + n2_index];
-          Int32 row_index = node_dof.dofId(node1, 0);
-          Int32 col_index = node_dof.dofId(node2, 0);
-          Int32 value_index;
+      Int32 n1_index = 0;
+      for (NodeLocalId node1 : cnc.nodes(icell)) {
+        Int32 n2_index = 0;
+        for (NodeLocalId node2 : cnc.nodes(icell)) {
+          if (nodes_infos.isOwn(node1)) {
+            Real v = K_e[n1_index * 4 + n2_index];
 
-          // Find the index of the value in the coo matrix
-          for (value_index = 0; value_index < row_length; value_index++) {
-            if (in_row_coo(value_index) == row_index && in_col_coo(value_index) == col_index) {
-              ax::doAtomic<ax::eAtomicOperation::Add>(in_out_val_coo(value_index), v);
-              break;
+            Int32 row_index = node_dof.dofId(node1, 0);
+            Int32 col_index = node_dof.dofId(node2, 0);
+
+            Int32 value_index = findIndexGpu(row_index, col_index, in_row_coo, in_col_coo, row_length);
+            ax::doAtomic<ax::eAtomicOperation::Add>(in_out_val_coo(value_index), v);
+
+            // Find the index of the value in the coo matrix
+            /* for (value_index = 0; value_index < row_length; value_index++) {
+              if (in_row_coo(value_index) == row_index && in_col_coo(value_index) == col_index) {
+                ax::doAtomic<ax::eAtomicOperation::Add>(in_out_val_coo(value_index), v);
+                break;
+              }
+            } */
+          }
+          ++n2_index;
+        }
+        ++n1_index;
+      }
+    };
+  }
+  else {
+    command << RUNCOMMAND_ENUMERATE(Cell, icell, allCells())
+    {
+      Real K_e[16] = { 0 };
+      _computeElementMatrixTETRA4GPU(icell, cnc, in_node_coord, K_e);
+
+      Int32 n1_index = 0;
+      for (NodeLocalId node1 : cnc.nodes(icell)) {
+        Int32 n2_index = 0;
+        for (NodeLocalId node2 : cnc.nodes(icell)) {
+          if (nodes_infos.isOwn(node1)) {
+            Real v = K_e[n1_index * 4 + n2_index];
+            Int32 row_index = node_dof.dofId(node1, 0);
+            Int32 col_index = node_dof.dofId(node2, 0);
+            Int32 value_index;
+
+            // Find the index of the value in the coo matrix
+            for (value_index = 0; value_index < row_length; value_index++) {
+              if (in_row_coo(value_index) == row_index && in_col_coo(value_index) == col_index) {
+                ax::doAtomic<ax::eAtomicOperation::Add>(in_out_val_coo(value_index), v);
+                break;
+              }
             }
           }
+          ++n2_index;
         }
-        ++n2_index;
+        ++n1_index;
       }
-      ++n1_index;
-    }
-  };
+    };
+  }
 }
 
 /*---------------------------------------------------------------------------*/
