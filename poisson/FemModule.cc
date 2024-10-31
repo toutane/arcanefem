@@ -28,6 +28,7 @@ void FemModule::_dumpTimeStats()
   JSONWriter json_writer(JSONWriter::FormatFlags::None);
 
   json_writer.beginObject();
+  json_writer.write("MatrixFormat", "COO");
   m_time_stats->dumpStatsJSON(json_writer);
   json_writer.endObject();
 
@@ -246,18 +247,20 @@ void FemModule::_dispatchBilinearOperatorAssembly()
     bool FemModule::* option;
     void (FemModule::*assembly_fun_2D)();
     void (FemModule::*assembly_fun_3D)();
+    std::string timer_action_name;
   };
 
-  std::vector<AssemblyMethod> assembly_method_vec = {
-    { &FemModule::m_use_legacy, &FemModule::_assembleBilinearOperatorTRIA3, &FemModule::_assembleBilinearOperatorTETRA4 },
-    { &FemModule::m_use_csr, &FemModule::_assembleCsrBilinearOperatorTRIA3, &FemModule::_assembleCsrBilinearOperatorTETRA4 },
-    { &FemModule::m_use_csr_gpu, &FemModule::_assembleCsrGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4 },
-    { &FemModule::m_use_coo, &FemModule::_assembleCooBilinearOperatorTRIA3, &FemModule::_assembleCooBilinearOperatorTETRA4 },
-    { &FemModule::m_use_coo_sort, &FemModule::_assembleCooSortBilinearOperatorTRIA3, &FemModule::_assembleCooSortBilinearOperatorTETRA4 },
-    { &FemModule::m_use_coo_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4 },
-    { &FemModule::m_use_coo_sort_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4 },
-    { &FemModule::m_use_nodewise_csr, &FemModule::_assembleNodeWiseCsrBilinearOperatorTria3, &FemModule::_assembleNodeWiseCsrBilinearOperatorTetra4 },
-    { &FemModule::m_use_buildless_csr, &FemModule::_assembleBuildLessCsrBilinearOperatorTria3, &FemModule::_assembleBuildLessCsrBilinearOperatorTetra4 },
+  std::vector<AssemblyMethod>
+  assembly_method_vec = {
+    { &FemModule::m_use_legacy, &FemModule::_assembleBilinearOperatorTRIA3, &FemModule::_assembleBilinearOperatorTETRA4, "AssembleBilinearOperator_Legacy" },
+    { &FemModule::m_use_csr, &FemModule::_assembleCsrBilinearOperatorTRIA3, &FemModule::_assembleCsrBilinearOperatorTETRA4, "AssembleBilinearOperator_Coo" },
+    { &FemModule::m_use_csr_gpu, &FemModule::_assembleCsrGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_CooSort" },
+    { &FemModule::m_use_coo, &FemModule::_assembleCooBilinearOperatorTRIA3, &FemModule::_assembleCooBilinearOperatorTETRA4, "AssembleBilinearOperator_Coo_Gpu" },
+    { &FemModule::m_use_coo_sort, &FemModule::_assembleCooSortBilinearOperatorTRIA3, &FemModule::_assembleCooSortBilinearOperatorTETRA4, "AssembleBilinearOperator_CooSort_Gpu" },
+    { &FemModule::m_use_coo_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_Csr" },
+    { &FemModule::m_use_coo_sort_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_Csr_Gpu" },
+    { &FemModule::m_use_nodewise_csr, &FemModule::_assembleNodeWiseCsrBilinearOperatorTria3, &FemModule::_assembleNodeWiseCsrBilinearOperatorTetra4, "AssembleBilinearOperator_CsrNodeWise" },
+    { &FemModule::m_use_buildless_csr, &FemModule::_assembleBuildLessCsrBilinearOperatorTria3, &FemModule::_assembleBuildLessCsrBilinearOperatorTetra4, "AssembleBilinearOperator_CsrBuildLess" },
   };
 
   for (const auto& method : assembly_method_vec) {
@@ -269,7 +272,7 @@ void FemModule::_dispatchBilinearOperatorAssembly()
       for (auto i = 0; i < m_cache_warming; ++i) {
         m_linear_system.clearValues();
         // resetStats() does nothing if the name doesn't exist yet, so OK for i = 0
-        m_time_stats->resetStats("AssembleBilinearOperator");
+        m_time_stats->resetStats(method.timer_action_name);
         (this->*assembly_fun)();
       }
 
@@ -430,7 +433,7 @@ _assembleLinearOperator()
   info() << "Applying Dirichlet boundary condition via  penalty method ";
 
   // time registration
-  Timer::Action timer_action(m_time_stats, "AssembleLinearOperator");
+  Timer::Action timer_action(m_time_stats, "AssembleLinearOperator_Legacy");
 
   // Temporary variable to keep values for the RHS part of the linear system
   VariableDoFReal& rhs_values(m_linear_system.rhsVariable());

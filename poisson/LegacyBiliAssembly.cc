@@ -18,7 +18,7 @@ _assembleBilinearOperatorTRIA3()
 {
   auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
 
-  Timer::Action timer_action(m_time_stats, "AssembleLegacyBilinearOperatorTria3");
+  Timer::Action timer_action(m_time_stats, "AssembleBilinearOperator_Legacy");
 
   ENUMERATE_ (Cell, icell, allCells()) {
     Cell cell = *icell;

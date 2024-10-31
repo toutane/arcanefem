@@ -297,7 +297,7 @@ _assembleCooGPUBilinearOperatorTRIA3()
 {
   info() << "Assembling COO GPU Bilinear Operator for TRIA3 elements";
 
-  Timer::Action timer_coo_gpu_bili(m_time_stats, "AssembleBilinearOperator");
+  Timer::Action timer_coo_gpu_bili(m_time_stats, m_use_coo ? "AssembleBilinearOperator_Coo_Gpu" : "AssembleBilinearOperator_CooSort_Gpu");
 
   {
     Timer::Action timer_coo_gpu_build(m_time_stats, "BuildMatrix");
@@ -374,7 +374,7 @@ _assembleCooGPUBilinearOperatorTETRA4()
 {
   info() << "Assembling COO GPU Bilinear Operator for TETRA4 elements";
 
-  Timer::Action timer_coo_gpu_bili(m_time_stats, "AssembleBilinearOperator");
+  Timer::Action timer_coo_gpu_bili(m_time_stats, m_use_coo ? "AssembleBilinearOperator_Coo_Gpu" : "AssembleBilinearOperator_CooSort_Gpu");
 
   {
     Timer::Action timer_coo_gpu_build(m_time_stats, "BuildMatrix");

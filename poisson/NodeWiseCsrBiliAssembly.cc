@@ -96,9 +96,9 @@ void FemModule::_buildMatrixNodeWiseCsr()
 
 void FemModule::_assembleNodeWiseCsrBilinearOperatorTria3()
 {
-  Timer::Action timer_nwcsr_bili(m_time_stats, "AssembleNodeWiseCsrBilinearOperatorTria3");
+  Timer::Action timer_nwcsr_bili(m_time_stats, "AssembleBilinearOperator_CsrNodeWise");
   {
-    Timer::Action timer_nwcsr_build(m_time_stats, "NodeWiseCsrBuildMatrix");
+    Timer::Action timer_nwcsr_build(m_time_stats, "BuildMatrix");
     // Build the csr matrix
     _buildMatrixNodeWiseCsr();
   }
@@ -124,7 +124,6 @@ void FemModule::_assembleNodeWiseCsrBilinearOperatorTria3()
   Arcane::ItemGenericInfoListView nodes_infos(this->mesh()->nodeFamily());
   Arcane::ItemGenericInfoListView cells_infos(this->mesh()->cellFamily());
 
-  Timer::Action timer_nwcsr_add_compute(m_time_stats, "NodeWiseCsrAddAndCompute");
   command << RUNCOMMAND_ENUMERATE(Node, inode, allNodes())
   {
     Int32 inode_index = 0;
@@ -206,9 +205,9 @@ void FemModule::_assembleNodeWiseCsrBilinearOperatorTria3()
  */
 void FemModule::_assembleNodeWiseCsrBilinearOperatorTetra4()
 {
-  Timer::Action timer_nwcsr_bili(m_time_stats, "AssembleNodeWiseCsrBilinearOperatorTetra4");
+  Timer::Action timer_nwcsr_bili(m_time_stats, "AssembleBilinearOperator_CsrNodeWise");
   {
-    Timer::Action timer_nwcsr_build(m_time_stats, "NodeWiseCsrBuildMatrix");
+    Timer::Action timer_nwcsr_build(m_time_stats, "BuildMatrix");
     _buildMatrixNodeWiseCsr();
   }
 
@@ -230,7 +229,6 @@ void FemModule::_assembleNodeWiseCsrBilinearOperatorTetra4()
   Arcane::ItemGenericInfoListView nodes_infos(this->mesh()->nodeFamily());
   Arcane::ItemGenericInfoListView cells_infos(this->mesh()->cellFamily());
 
-  Timer::Action timer_nwcsr_add_compute(m_time_stats, "NodeWiseCsrAddAndCompute");
   command << RUNCOMMAND_ENUMERATE(Node, inode, allNodes())
   {
     for (auto cell : ncc.cells(inode)) {

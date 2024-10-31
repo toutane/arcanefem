@@ -171,7 +171,7 @@ void FemModule::
 _assembleCsrGPUBilinearOperatorTRIA3()
 {
 
-  Timer::Action timer_gpu_bili(m_time_stats, "AssembleBilinearOperator");
+  Timer::Action timer_gpu_bili(m_time_stats, "AssembleBilinearOperator_Csr_Gpu");
 
   {
     Timer::Action timer_gpu_build(m_time_stats, "BuildMatrix");
@@ -256,7 +256,7 @@ _assembleCsrGPUBilinearOperatorTRIA3()
 void FemModule::
 _assembleCsrGPUBilinearOperatorTETRA4()
 {
-  Timer::Action timer_gpu_bili(m_time_stats, "AssembleBilinearOperator");
+  Timer::Action timer_gpu_bili(m_time_stats, "AssembleBilinearOperator_Csr_Gpu");
 
   {
     Timer::Action timer_gpu_build(m_time_stats, "BuildMatrix");

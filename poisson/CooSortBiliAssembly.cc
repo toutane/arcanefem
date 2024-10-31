@@ -88,7 +88,7 @@ _assembleCooSortBilinearOperatorTRIA3()
 {
   info() << "Assembling COO Sort Bilinear Operator TRIA3";
 
-  Timer::Action timer_coosort_bili(m_time_stats, "AssembleBilinearOperator");
+  Timer::Action timer_coosort_bili(m_time_stats, "AssembleBilinearOperator_CooSort");
 
   {
     Timer::Action timer_build_coosort(m_time_stats, "BuildMatrix");
@@ -142,7 +142,7 @@ void FemModule::_assembleCooSortBilinearOperatorTETRA4()
 {
   info() << "Assembling COO Sort Bilinear Operator TETRA4";
 
-  Timer::Action timer_coosort_bili(m_time_stats, "AssembleBilinearOperator");
+  Timer::Action timer_coosort_bili(m_time_stats, "AssembleBilinearOperator_CooSort");
 
   {
     Timer::Action timer_build_coosort(m_time_stats, "BuildMatrix");
