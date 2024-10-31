@@ -175,9 +175,9 @@ class FemModule
 
   NumArray<Real, MDDim1> m_rhs_vect;
 
-  std::ofstream logger;
+  /* std::ofstream logger;
   std::ofstream wbuild;
-  std::ofstream timer;
+  std::ofstream timer; */
 
   Integer cache_index;
 
@@ -198,6 +198,7 @@ class FemModule
   void _handleFlags();
   void _doStationarySolve();
   void _getMaterialParameters();
+  void _dispatchBilinearOperatorAssembly();
   void _updateBoundayConditions();
   void _checkCellType();
   void _assembleBilinearOperatorTRIA3();
