@@ -116,10 +116,10 @@ void FemModule::
 _assembleCsrBilinearOperatorTRIA3()
 {
 
-  Timer::Action timer_csr_bili(m_time_stats, "AssembleCsrBilinearOperatorTria3");
+  Timer::Action timer_csr_bili(m_time_stats, "AssembleBilinearOperator");
+
   {
-    Timer::Action timer_csr_build(m_time_stats, "CsrBuildMatrix");
-    // Build the csr matrix
+    Timer::Action timer_csr_build(m_time_stats, "BuildMatrix");
     _buildMatrixCsr();
   }
 
@@ -166,8 +166,10 @@ _assembleCsrBilinearOperatorTRIA3()
 void FemModule::
 _assembleCsrBilinearOperatorTETRA4()
 {
-  Timer::Action timer_csr_bili(m_time_stats, "AssembleCsrBilinearOperatorTetra4");
+  Timer::Action timer_csr_bili(m_time_stats, "AssembleBilinearOperator");
+
   {
+    Timer::Action timer_csr_build(m_time_stats, "BuildMatrix");
     _buildMatrixCsr();
   }
 

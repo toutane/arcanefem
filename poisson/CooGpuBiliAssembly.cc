@@ -297,13 +297,10 @@ _assembleCooGPUBilinearOperatorTRIA3()
 {
   info() << "Assembling COO GPU Bilinear Operator for TRIA3 elements";
 
-  Timer::Action timer_coo_gpu_bili(
-  m_time_stats, m_use_coo_gpu ? "AssembleCooGpuBilinearOperatorTria3" : "AssembleCooSortGpuBilinearOperatorTria3");
+  Timer::Action timer_coo_gpu_bili(m_time_stats, "AssembleBilinearOperator");
 
   {
-    Timer::Action timer_coo_gpu_build(m_time_stats,
-                                      m_use_coo_gpu ? "BuildMatrixCooGpu"
-                                                    : "BuildMatrixCooSortGpu");
+    Timer::Action timer_coo_gpu_build(m_time_stats, "BuildMatrix");
     _buildMatrixCooGPU();
   }
 
@@ -324,8 +321,6 @@ _assembleCooGPUBilinearOperatorTRIA3()
   Arcane::ItemGenericInfoListView cells_infos(this->mesh()->cellFamily());
 
   bool is_row_array_sorted = m_use_coo_sort_gpu || (mesh()->dimension() == 3 && !options()->createEdges());
-
-  Timer::Action timer_coo_gpu_compute_add(m_time_stats, "CooGpuComputeAndAdd");
 
   command << RUNCOMMAND_ENUMERATE(Cell, icell, allCells())
   {
@@ -379,13 +374,10 @@ _assembleCooGPUBilinearOperatorTETRA4()
 {
   info() << "Assembling COO GPU Bilinear Operator for TETRA4 elements";
 
-  Timer::Action timer_coo_gpu_bili(
-  m_time_stats, m_use_coo_gpu ? "AssembleCooGpuBilinearOperatorTetra4" : "AssembleCooSortGpuBilinearOperatorTetra4");
+  Timer::Action timer_coo_gpu_bili(m_time_stats, "AssembleBilinearOperator");
 
   {
-    Timer::Action timer_coo_gpu_build(m_time_stats,
-                                      m_use_coo_gpu ? "BuildMatrixCooGpu"
-                                                    : "BuildMatrixCooSortGpu");
+    Timer::Action timer_coo_gpu_build(m_time_stats, "BuildMatrix");
     _buildMatrixCooGPU();
   }
 
@@ -406,8 +398,6 @@ _assembleCooGPUBilinearOperatorTETRA4()
   Arcane::ItemGenericInfoListView cells_infos(this->mesh()->cellFamily());
 
   bool is_row_array_sorted = m_use_coo_sort_gpu || (mesh()->dimension() == 3 && !options()->createEdges());
-
-  Timer::Action timer_coo_gpu_compute_add(m_time_stats, "CooGpuComputeAndAdd");
 
   command << RUNCOMMAND_ENUMERATE(Cell, icell, allCells())
   {
