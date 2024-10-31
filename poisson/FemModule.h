@@ -189,12 +189,34 @@ class FemModule
 
  private:
 
+  enum Format
+  {
+    LEGACY,
+    CSR,
+    CSR_GPU,
+    COO,
+    COO_SORT,
+    COO_GPU,
+    COO_SORT_GPU,
+    CSR_NODEWISE,
+    CSR_BUILDLESS
+  };
+
+  struct AssemblyMethod
+  {
+    Format format;
+    bool FemModule::* option;
+    void (FemModule::*assembly_fun_2D)();
+    void (FemModule::*assembly_fun_3D)();
+    std::string timer_action_name;
+  };
+
   void fileNumArray(bool ref, NumArray<Real, MDDim1> numarray);
 
   void _handleFlags();
   void _doStationarySolve();
   void _getMaterialParameters();
-  void _dispatchBilinearOperatorAssembly();
+  Format _dispatchBilinearOperatorAssembly();
   void _updateBoundayConditions();
   void _checkCellType();
   void _assembleBilinearOperatorTRIA3();
@@ -267,9 +289,12 @@ class FemModule
  private:
  public:
 
-  void _buildMatrixCooGPU();
+  void _buildMatrixCooGPU(bool is_sort);
   void _assembleCooGPUBilinearOperatorTRIA3();
   void _assembleCooGPUBilinearOperatorTETRA4();
+
+  void _assembleCooSortGPUBilinearOperatorTRIA3();
+  void _assembleCooSortGPUBilinearOperatorTETRA4();
 
  private:
 

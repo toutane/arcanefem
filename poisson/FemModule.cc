@@ -152,44 +152,44 @@ _handleFlags()
   }
   if (parameter_list.getParameterOrNull("COO") == "TRUE" || options()->coo()) {
     m_use_coo = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "COO: The COO datastructure and its associated methods will be used";
   }
   if (parameter_list.getParameterOrNull("COO_SORT") == "TRUE" || options()->cooSorting()) {
     m_use_coo_sort = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "COO_SORT: The COO with sorting datastructure and its associated methods will be used";
   }
   if (parameter_list.getParameterOrNull("COO_GPU") == "TRUE" || options()->cooGpu()) {
     m_use_coo_gpu = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "COO_GPU: The COO datastructure GPU comptaible and its associated methods will be used";
   }
   if (parameter_list.getParameterOrNull("COO_SORT_GPU") == "TRUE" || options()->cooSortingGpu()) {
     m_use_coo_sort_gpu = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "COO_SORT_GPU: The COO with sorting datastructure GPU comptaible and its associated methods will be used";
   }
   if (parameter_list.getParameterOrNull("CSR") == "TRUE" || options()->csr()) {
     m_use_csr = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "CSR: The CSR datastructure and its associated methods will be used";
   }
 #ifdef ARCANE_HAS_ACCELERATOR
   if (parameter_list.getParameterOrNull("CSR_GPU") == "TRUE" || options()->csrGpu()) {
     m_use_csr_gpu = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "CSR_GPU: The CSR datastructure GPU compatible and its associated methods will be used";
   }
 #endif
   if (parameter_list.getParameterOrNull("NWCSR") == "TRUE" || options()->nwcsr()) {
     m_use_nodewise_csr = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "NWCSR: The Csr datastructure (GPU compatible) and its associated methods will be used with computation in a nodewise manner";
   }
   if (parameter_list.getParameterOrNull("BLCSR") == "TRUE" || options()->blcsr()) {
     m_use_buildless_csr = true;
-    m_use_legacy = false;
+    // m_use_legacy = false;
     info() << "BLCSR: The Csr datastructure (GPU compatible) and its associated methods will be used with computation in a nodewise manner with the building phases incorporated in the computation";
   }
   if (parameter_list.getParameterOrNull("LEGACY") == "TRUE" || m_use_legacy || options()->legacy()) {
@@ -216,18 +216,17 @@ _doStationarySolve()
 
   _getMaterialParameters();
 
-  // Assemble the FEM bilinear operator (LHS - matrix A)
-  _dispatchBilinearOperatorAssembly();
+  FemModule::Format last_fmt = _dispatchBilinearOperatorAssembly();
 
   // Assemble the FEM linear operator (RHS - vector b)
-  if (m_use_csr || m_use_csr_gpu || m_use_nodewise_csr || m_use_buildless_csr) {
+  if (last_fmt == Format::CSR || last_fmt == Format::CSR_GPU || last_fmt == Format::CSR_NODEWISE || last_fmt == Format::CSR_BUILDLESS) {
     _assembleCsrGpuLinearOperator();
     m_csr_matrix.translateToLinearSystem(m_linear_system);
     _translateRhs();
   }
   else {
     // No needs to translate the system for legacy (it fills it directly)
-    if (!m_use_legacy)
+    if (last_fmt != Format::LEGACY)
       m_coo_matrix.translateToLinearSystem(m_linear_system);
     _assembleLinearOperator();
   }
@@ -240,45 +239,43 @@ _doStationarySolve()
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-void FemModule::_dispatchBilinearOperatorAssembly()
+FemModule::Format FemModule::_dispatchBilinearOperatorAssembly()
 {
-  struct AssemblyMethod
-  {
-    bool FemModule::* option;
-    void (FemModule::*assembly_fun_2D)();
-    void (FemModule::*assembly_fun_3D)();
-    std::string timer_action_name;
+
+  std::vector<FemModule::AssemblyMethod>
+  assembly_method_vec = {
+    { LEGACY, &FemModule::m_use_legacy, &FemModule::_assembleBilinearOperatorTRIA3, &FemModule::_assembleBilinearOperatorTETRA4, "AssembleBilinearOperator_Legacy" },
+    { CSR, &FemModule::m_use_csr, &FemModule::_assembleCsrBilinearOperatorTRIA3, &FemModule::_assembleCsrBilinearOperatorTETRA4, "AssembleBilinearOperator_Csr" },
+    { CSR_GPU, &FemModule::m_use_csr_gpu, &FemModule::_assembleCsrGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_Csr_Gpu" },
+    { CSR_NODEWISE, &FemModule::m_use_nodewise_csr, &FemModule::_assembleNodeWiseCsrBilinearOperatorTria3, &FemModule::_assembleNodeWiseCsrBilinearOperatorTetra4, "AssembleBilinearOperator_CsrNodeWise" },
+    { CSR_BUILDLESS, &FemModule::m_use_buildless_csr, &FemModule::_assembleBuildLessCsrBilinearOperatorTria3, &FemModule::_assembleBuildLessCsrBilinearOperatorTetra4, "AssembleBilinearOperator_CsrBuildLess" },
+    { COO, &FemModule::m_use_coo, &FemModule::_assembleCooBilinearOperatorTRIA3, &FemModule::_assembleCooBilinearOperatorTETRA4, "AssembleBilinearOperator_Coo" },
+    { COO_SORT, &FemModule::m_use_coo_sort, &FemModule::_assembleCooSortBilinearOperatorTRIA3, &FemModule::_assembleCooSortBilinearOperatorTETRA4, "AssembleBilinearOperator_CooSort" },
+    { COO_GPU, &FemModule::m_use_coo_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_Coo_Gpu" },
+    { COO_SORT_GPU, &FemModule::m_use_coo_sort_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_CooSort_Gpu" },
   };
 
-  std::vector<AssemblyMethod>
-  assembly_method_vec = {
-    { &FemModule::m_use_legacy, &FemModule::_assembleBilinearOperatorTRIA3, &FemModule::_assembleBilinearOperatorTETRA4, "AssembleBilinearOperator_Legacy" },
-    { &FemModule::m_use_csr, &FemModule::_assembleCsrBilinearOperatorTRIA3, &FemModule::_assembleCsrBilinearOperatorTETRA4, "AssembleBilinearOperator_Coo" },
-    { &FemModule::m_use_csr_gpu, &FemModule::_assembleCsrGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_CooSort" },
-    { &FemModule::m_use_coo, &FemModule::_assembleCooBilinearOperatorTRIA3, &FemModule::_assembleCooBilinearOperatorTETRA4, "AssembleBilinearOperator_Coo_Gpu" },
-    { &FemModule::m_use_coo_sort, &FemModule::_assembleCooSortBilinearOperatorTRIA3, &FemModule::_assembleCooSortBilinearOperatorTETRA4, "AssembleBilinearOperator_CooSort_Gpu" },
-    { &FemModule::m_use_coo_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_Csr" },
-    { &FemModule::m_use_coo_sort_gpu, &FemModule::_assembleCooGPUBilinearOperatorTRIA3, &FemModule::_assembleCooGPUBilinearOperatorTETRA4, "AssembleBilinearOperator_Csr_Gpu" },
-    { &FemModule::m_use_nodewise_csr, &FemModule::_assembleNodeWiseCsrBilinearOperatorTria3, &FemModule::_assembleNodeWiseCsrBilinearOperatorTetra4, "AssembleBilinearOperator_CsrNodeWise" },
-    { &FemModule::m_use_buildless_csr, &FemModule::_assembleBuildLessCsrBilinearOperatorTria3, &FemModule::_assembleBuildLessCsrBilinearOperatorTetra4, "AssembleBilinearOperator_CsrBuildLess" },
-  };
+  Format last_used_format;
 
   for (const auto& method : assembly_method_vec) {
     if (this->*method.option) {
+      last_used_format = method.format;
 
+      // Assemble the FEM bilinear operator (LHS - matrix A)
       auto assembly_fun = mesh()->dimension() == 2 ? method.assembly_fun_2D : method.assembly_fun_3D;
 
       // Cache warming is equal to 1 by default
       for (auto i = 0; i < m_cache_warming; ++i) {
         m_linear_system.clearValues();
         // resetStats() does nothing if the name doesn't exist yet, so OK for i = 0
+        info() << "EXECUTING: " << method.timer_action_name;
         m_time_stats->resetStats(method.timer_action_name);
         (this->*assembly_fun)();
       }
-
-      return;
     }
   }
+
+  return last_used_format;
 }
 
 void FemModule::
