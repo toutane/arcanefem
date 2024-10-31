@@ -207,11 +207,12 @@ class FemModule
   void _assembleLinearOperator();
   void _applyDirichletBoundaryConditions();
   void _checkResultFile();
-  void _writeInJson();
-  void _saveTimeInCSV();
-  void _saveNoBuildTimeInCSV();
-  void _benchBuildRow();
-  Real _readTimeFromJson(String main_time, String sub_time);
+  void _dumpTimeStats();
+  // void _writeInJson();
+  // void _saveTimeInCSV();
+  // void _saveNoBuildTimeInCSV();
+  // void _benchBuildRow();
+  // Real _readTimeFromJson(String main_time, String sub_time);
   FixedMatrix<3, 3> _computeElementMatrixTRIA3(Cell cell);
   FixedMatrix<4, 4> _computeElementMatrixTETRA4(Cell cell);
   Real _computeAreaTriangle3(Cell cell);

@@ -17,7 +17,7 @@
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-void FemModule::
+/* void FemModule::
 _writeInJson()
 {
   if (!_isMasterRank())
@@ -31,12 +31,12 @@ _writeInJson()
   }
   json_writer.endObject();
   jsonFile << json_writer.getBuffer();
-}
+} */
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-Real FemModule::
+/* Real FemModule::
 _readTimeFromJson(String main_time, String sub_time)
 {
   UniqueArray<Byte> bytes;
@@ -97,16 +97,16 @@ _readTimeFromJson(String main_time, String sub_time)
   ss << function.child("Cumulative").value();
   ss >> val;
   return *Convert::Type<Real>::tryParse(val);
-}
+} */
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-void FemModule::
+/* void FemModule::
 _saveTimeInCSV()
 {
   std::ofstream csv_save;
-  String csv_file_name = String::format("time.{0}.csv",parallelMng()->commRank());
+  String csv_file_name = String::format("time.{0}.csv", parallelMng()->commRank());
   if (!fs::exists(csv_file_name.localstr())) {
     csv_save.open(csv_file_name.localstr());
     csv_save << "Number of Nodes,Legacy,COO with sorting,COO,CSR,CSR made for GPU,Node Wise CSR made for GPU,BLCSR made for GPU,CSR GPU,Node Wise CSR GPU,BLCSR GPU\n";
@@ -136,16 +136,16 @@ _saveTimeInCSV()
   }
   csv_save << "\n";
   csv_save.close();
-}
+} */
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-void FemModule::
+/* void FemModule::
 _saveNoBuildTimeInCSV()
 {
   std::ofstream csv_save;
-  String csv_file_name = String::format("timeNoBuild.{0}.csv",parallelMng()->commRank());
+  String csv_file_name = String::format("timeNoBuild.{0}.csv", parallelMng()->commRank());
   if (!fs::exists(csv_file_name.localstr())) {
     csv_save.open(csv_file_name.localstr());
     csv_save << "Number of Nodes,Legacy,COO with sorting,COO,CSR,CSR made for GPU,Node Wise CSR made for GPU,BLCSR made for GPU,CSR GPU,Node Wise CSR GPU,BLCSR GPU\n";
@@ -175,13 +175,13 @@ _saveNoBuildTimeInCSV()
   }
   csv_save << "\n";
   csv_save.close();
-}
+} */
 
-void FemModule::
+/* void FemModule::
 _benchBuildRow()
 {
   std::ofstream csv_save;
-  String csv_file_name = String::format("buildRow.{0}.csv",parallelMng()->commRank());
+  String csv_file_name = String::format("buildRow.{0}.csv", parallelMng()->commRank());
   if (!fs::exists(csv_file_name.localstr())) {
     csv_save.open(csv_file_name.localstr());
     csv_save << "Number of Nodes,Build on CPU,Build on GPU\n";
@@ -193,6 +193,26 @@ _benchBuildRow()
   csv_save << _readTimeFromJson("AssembleBuildLessCsrBilinearOperatorTria3", "BuildLessCsrBuildMatrix") / m_cache_warming << ",";
   csv_save << _readTimeFromJson("AssembleBuildLessCsrBilinearOperatorTria3", "BuildLessCsrBuildMatrixGPU") / m_cache_warming << "\n";
   csv_save.close();
+} */
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void FemModule::_dumpTimeStats()
+{
+  // Only master sub domain values are representative
+  if (!_isMasterRank())
+    return;
+
+  ofstream dump_file("./output/listing/time_stats.json");
+
+  JSONWriter json_writer(JSONWriter::FormatFlags::None);
+
+  json_writer.beginObject();
+  m_time_stats->dumpStatsJSON(json_writer);
+  json_writer.endObject();
+
+  dump_file << json_writer.getBuffer();
 }
 
 /*---------------------------------------------------------------------------*/
@@ -201,9 +221,10 @@ _benchBuildRow()
 void FemModule::
 endModule()
 {
-  _writeInJson();
-  _saveTimeInCSV();
-  _saveNoBuildTimeInCSV();
+  _dumpTimeStats();
+  // _writeInJson();
+  // _saveTimeInCSV();
+  // _saveNoBuildTimeInCSV();
   //_benchBuildRow();
 }
 
@@ -250,19 +271,19 @@ startInit()
 {
   info() << "Module Fem INIT";
 
-  if (m_register_time && _isMasterRank()) {
+  /* if (m_register_time && _isMasterRank()) {
     logger = ofstream("timer.txt");
     wbuild = ofstream("with_build.csv", std::ios_base::app);
     wbuild << nbNode() << ",";
     timer = ofstream("timer.csv", std::ios_base::app);
     timer << nbNode() << ",";
-  }
+  } */
 
   {
     IMesh* mesh = defaultMesh();
     // If we do not create edges, we need to create custom connectivity
     // to store the neighbours node of a node
-    if (mesh->dimension()==3 && !options()->createEdges()){
+    if (mesh->dimension() == 3 && !options()->createEdges()) {
       m_node_node_via_edge_connectivity = MeshUtils::computeNodeNodeViaEdgeConnectivity(defaultMesh(), "NodeNodeViaEdge");
       m_node_node_via_edge_connectivity->connectivity()->dumpStats(std::cout);
       std::cout << "\n";
@@ -310,11 +331,11 @@ _handleFlags()
 {
   ParameterList parameter_list = this->subDomain()->application()->applicationInfo().commandLineArguments().parameters();
   info() << "-----------------------------------------------------------------------------------------";
-  info() << "The time will be registered by arcane in the output/listing/logs.0 file, and will be added to (or will create) the time.csv (with time for the various bilinear assembly phases) and timeNoBuild.csv (with time without the building part of COO and CSR for the various bilinear assembly phases) fil";
-  if (parameter_list.getParameterOrNull("REGISTER_TIME") == "TRUE") {
+  // info() << "The time will be registered by arcane in the output/listing/logs.0 file, and will be added to (or will create) the time.csv (with time for the various bilinear assembly phases) and timeNoBuild.csv (with time without the building part of COO and CSR for the various bilinear assembly phases) fil";
+  /* if (parameter_list.getParameterOrNull("REGISTER_TIME") == "TRUE") {
     m_register_time = true;
     info() << "REGISTER_TIME: The time will also be registered in the timer.txt, with_build.csv and timer.csv file";
-  }
+  } */
   String cache_warm = parameter_list.getParameterOrNull("CACHE_WARMING");
   if (cache_warm != NULL) {
     auto tmp = Convert::Type<Integer>::tryParse(cache_warm);
@@ -401,8 +422,9 @@ _doStationarySolve()
     else if (options()->meshType == "TRIA3")
       _assembleBilinearOperatorTRIA3();
     if (m_cache_warming != 1) {
-      m_time_stats->resetStats("AssembleLegacyBilinearOperatorTria3");
       for (cache_index = 1; cache_index < m_cache_warming; cache_index++) {
+        info() << "reset timer stats";
+        m_time_stats->resetStats("AssembleLegacyBilinearOperatorTria3");
         m_linear_system.clearValues();
         if (options()->meshType == "TETRA4")
           _assembleBilinearOperatorTETRA4();
