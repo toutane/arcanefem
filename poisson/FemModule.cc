@@ -12,6 +12,7 @@
 /*---------------------------------------------------------------------------*/
 
 #include "FemModule.h"
+//#include "ArcaneFemFunctions.h"
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -1788,6 +1789,14 @@ bool FemModule::
 _isMasterRank() const
 {
   return parallelMng()->isMasterIO();
+}
+
+ARCCORE_HOST_DEVICE
+FixedMatrix<4, 4> FemModule::
+_computeElementMatrixTetra4(CellLocalId icell, const IndexedCellNodeConnectivityView& cnc, const ax::VariableNodeReal3InView& in_node_coord)
+{
+  Real volume = ArcaneFemFunctions::MeshOperation::computeVolumeTetra4HostDevice(icell, cnc, in_node_coord);
+  return {};
 }
 
 /*---------------------------------------------------------------------------*/

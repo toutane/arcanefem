@@ -1,13 +1,17 @@
 option(ENABLE_DEBUG_MATRIX "Enable Debug matrix instead of a sparse one" OFF)
 
+set(ACCELERATOR_SOURCES CsrFormatVec.cc)
+
 add_library(FemUtils
+  ${ACCELERATOR_SOURCES}
   FemUtils.h
   FemUtils.cc
   DoFLinearSystem.h
   DoFLinearSystem.cc
   CooFormatMatrix.h
-  CsrFormatMatrix.h
   CsrFormatMatrix.cc
+  CsrFormatMatrix.h
+  CsrFormatVec.h
   FemDoFsOnNodes.h
   FemDoFsOnNodes.cc
   FemBoundaryConditions.cc
@@ -25,6 +29,10 @@ add_library(FemUtils
   HypreDoFLinearSystemFactory_axl.h
   FemBoundaryConditions_axl.h
 )
+
+arcane_accelerator_add_source_files(${ACCELERATOR_SOURCES})
+
+arcane_accelerator_add_to_target(FemUtils)
 
 arcane_generate_axl(AlephDoFLinearSystemFactory)
 arcane_generate_axl(SequentialBasicDoFLinearSystemFactory)

@@ -142,6 +142,7 @@ void FemModule::_addValueToGlobalMatrixGpu(Int32 begin, Int32 end, Int32 col, ax
 
 void FemModule::_assembleBuildLessCsrBilinearOperatorTria3()
 {
+
   Timer::Action timer_bili(m_time_stats, "AssembleBilinearOperator_CsrBuildLess");
 
   {
@@ -211,10 +212,28 @@ void FemModule::_assembleBuildLessCsrBilinearOperatorTetra4()
 
   {
     Timer::Action timer_build(m_time_stats, "BuildMatrix");
-    _buildMatrixGpuBuildLessCsr();
+    //_buildMatrixGpuBuildLessCsr();
+    m_csr_matrix.initialize(m_dof_family, 2 * m_nb_edge + nbNode(), nbNode());
+    m_csr_vec_matrix.initialize(nbNode(), 2 * m_nb_edge + nbNode());
+    auto* connectivity_ptr = m_node_node_via_edge_connectivity.get();
+    ARCANE_CHECK_POINTER(connectivity_ptr);
+    IndexedNodeNodeConnectivityView nn_cv = connectivity_ptr->view();
+    m_csr_vec_matrix.computeRow(acceleratorMng()->defaultRunner(), mesh(), &m_dofs_on_nodes, m_node_node_via_edge_connectivity);
+    for (auto i = 0; i < m_csr_matrix.m_matrix_row.extent0(); ++i)
+      m_csr_matrix.m_matrix_row[i] = m_csr_vec_matrix.m_matrix_row[i];
   }
 
-  RunQueue* queue = acceleratorMng()->defaultQueue();
+  // auto lambda = [this] ARCCORE_HOST_DEVICE(CellLocalId icell, const IndexedCellNodeConnectivityView& cnc, const ax::VariableNodeReal3InView& in_node_coord) { return _computeElementMatrixTetra4(icell, cnc, in_node_coord); };
+
+  // m_csr_vec_matrix.assemble<const ARCCORE_HOST_DEVICE std::function<FixedMatrix<4, 4>(CellLocalId icell, const IndexedCellNodeConnectivityView& cnc, const ax::VariableNodeReal3InView& in_node_coord)>&, 4>(m_node_coord, lambda);
+  ComputeMatrixFunctor functor;
+  m_csr_vec_matrix.assemble<4>(this->mesh(), m_node_coord, functor);
+  for (auto i = 0; i < m_csr_matrix.m_matrix_column.extent0(); ++i)
+    m_csr_matrix.m_matrix_column[i] = m_csr_vec_matrix.m_matrix_column[i];
+  for (auto i = 0; i < m_csr_matrix.m_matrix_value.extent0(); ++i)
+    m_csr_matrix.m_matrix_value[i] = m_csr_vec_matrix.m_matrix_value[i];
+
+  /* RunQueue* queue = acceleratorMng()->defaultQueue();
   auto command = makeCommand(queue);
 
   auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
@@ -270,7 +289,7 @@ void FemModule::_assembleBuildLessCsrBilinearOperatorTetra4()
         i++;
       }
     }
-  };
+  }; */
 }
 
 /*---------------------------------------------------------------------------*/

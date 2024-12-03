@@ -150,13 +150,13 @@ void FemModule::
 _getMaterialParameters()
 {
   info() << "Get material parameters...";
-  f1   = options()->f1();                  // body force in Y
-  f2   = options()->f2();                  // body force in Y
-  E    = options()->E();                   // Youngs modulus
-  nu   = options()->nu();                  // Poission ratio
+  f1 = options()->f1(); // body force in Y
+  f2 = options()->f2(); // body force in Y
+  E = options()->E(); // Youngs modulus
+  nu = options()->nu(); // Poission ratio
 
-  mu2 = ( E/(2*(1+nu)) )*2;                // lame parameter mu * 2
-  lambda = E*nu/((1+nu)*(1-2*nu));         // lame parameter lambda
+  mu2 = (E / (2 * (1 + nu))) * 2; // lame parameter mu * 2
+  lambda = E * nu / ((1 + nu) * (1 - 2 * nu)); // lame parameter lambda
 }
 
 /*---------------------------------------------------------------------------*/
@@ -190,7 +190,7 @@ _applyDirichletBoundaryConditions()
     Real u1_val = bs->u1();
     Real u2_val = bs->u2();
 
-    if( bs->u1.isPresent() && bs->u2.isPresent()) {
+    if (bs->u1.isPresent() && bs->u2.isPresent()) {
       info() << "Apply Dirichlet boundary condition surface=" << group.name() << " u1= " << u1_val << " u2= " << u2_val;
       ENUMERATE_ (Face, iface, group) {
         for (Node node : iface->nodes()) {
@@ -203,7 +203,7 @@ _applyDirichletBoundaryConditions()
       continue;
     }
 
-    if(bs->u1.isPresent()) {
+    if (bs->u1.isPresent()) {
       info() << "Apply Dirichlet boundary condition surface=" << group.name() << " u1=" << u1_val;
       ENUMERATE_ (Face, iface, group) {
         for (Node node : iface->nodes()) {
@@ -214,7 +214,7 @@ _applyDirichletBoundaryConditions()
       continue;
     }
 
-    if(bs->u2.isPresent()) {
+    if (bs->u2.isPresent()) {
       info() << "Apply Dirichlet boundary condition surface=" << group.name() << " u2=" << u2_val;
       ENUMERATE_ (Face, iface, group) {
         for (Node node : iface->nodes()) {
@@ -225,7 +225,6 @@ _applyDirichletBoundaryConditions()
       continue;
     }
   }
-
 
   // Handle all the Dirichlet point conditions.
   // In the 'arc' file, there are in the following format:
@@ -240,7 +239,7 @@ _applyDirichletBoundaryConditions()
     Real u1_val = bs->u1();
     Real u2_val = bs->u2();
 
-    if( bs->u1.isPresent() && bs->u2.isPresent()) {
+    if (bs->u1.isPresent() && bs->u2.isPresent()) {
       info() << "Apply Dirichlet point condition on node=" << group.name() << " u1= " << u1_val << " u2= " << u2_val;
       ENUMERATE_ (Node, inode, group) {
         Node node = *inode;
@@ -252,7 +251,7 @@ _applyDirichletBoundaryConditions()
       continue;
     }
 
-    if(bs->u1.isPresent()) {
+    if (bs->u1.isPresent()) {
       info() << "Apply Dirichlet point condition on node=" << group.name() << " u1=" << u1_val;
       ENUMERATE_ (Node, inode, group) {
         Node node = *inode;
@@ -262,7 +261,7 @@ _applyDirichletBoundaryConditions()
       continue;
     }
 
-    if(bs->u2.isPresent()) {
+    if (bs->u2.isPresent()) {
       info() << "Apply Dirichlet point condition on node=" << group.name() << " u2=" << u2_val;
       ENUMERATE_ (Node, inode, group) {
         Node node = *inode;
@@ -272,7 +271,6 @@ _applyDirichletBoundaryConditions()
       continue;
     }
   }
-
 }
 
 /*---------------------------------------------------------------------------*/
@@ -295,7 +293,6 @@ _assembleLinearOperator()
 
   auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
 
-
   if (options()->enforceDirichletMethod() == "Penalty") {
 
     //----------------------------------------------
@@ -314,7 +311,7 @@ _assembleLinearOperator()
     info() << "Applying Dirichlet boundary condition via "
            << options()->enforceDirichletMethod() << " method ";
 
-    Real Penalty = options()->penalty();        // 1.0e30 is the default
+    Real Penalty = options()->penalty(); // 1.0e30 is the default
 
     ENUMERATE_ (Node, inode, ownNodes()) {
       NodeLocalId node_id = *inode;
@@ -335,7 +332,8 @@ _assembleLinearOperator()
         }
       }
     }
-  }else if (options()->enforceDirichletMethod() == "WeakPenalty") {
+  }
+  else if (options()->enforceDirichletMethod() == "WeakPenalty") {
 
     //----------------------------------------------
     // weak penalty method to enforce Dirichlet BC
@@ -353,7 +351,7 @@ _assembleLinearOperator()
     info() << "Applying Dirichlet boundary condition via "
            << options()->enforceDirichletMethod() << " method ";
 
-    Real Penalty = options()->penalty();        // 1.0e30 is the default
+    Real Penalty = options()->penalty(); // 1.0e30 is the default
 
     ENUMERATE_ (Node, inode, ownNodes()) {
       NodeLocalId node_id = *inode;
@@ -374,7 +372,8 @@ _assembleLinearOperator()
         }
       }
     }
-  }else if (options()->enforceDirichletMethod() == "RowElimination") {
+  }
+  else if (options()->enforceDirichletMethod() == "RowElimination") {
 
     //----------------------------------------------
     // Row elimination method to enforce Dirichlet BC
@@ -399,17 +398,16 @@ _assembleLinearOperator()
 
         Real u1_dirichlet = m_U[node_id].x;
         m_linear_system.eliminateRow(dof_id1, u1_dirichlet);
-
       }
       if (m_u2_fixed[node_id]) {
         DoFLocalId dof_id2 = node_dof.dofId(node_id, 1);
 
         Real u2_dirichlet = m_U[node_id].y;
         m_linear_system.eliminateRow(dof_id2, u2_dirichlet);
-
       }
     }
-  }else if (options()->enforceDirichletMethod() == "RowColumnElimination") {
+  }
+  else if (options()->enforceDirichletMethod() == "RowColumnElimination") {
 
     //----------------------------------------------
     // Row elimination method to enforce Dirichlet BC
@@ -434,17 +432,16 @@ _assembleLinearOperator()
 
         Real u1_dirichlet = m_U[node_id].x;
         m_linear_system.eliminateRowColumn(dof_id1, u1_dirichlet);
-
       }
       if (m_u2_fixed[node_id]) {
         DoFLocalId dof_id2 = node_dof.dofId(node_id, 1);
 
         Real u2_dirichlet = m_U[node_id].y;
         m_linear_system.eliminateRowColumn(dof_id2, u2_dirichlet);
-
       }
     }
-  }else {
+  }
+  else {
 
     info() << "Applying Dirichlet boundary condition via "
            << options()->enforceDirichletMethod() << " is not supported \n"
@@ -464,7 +461,7 @@ _assembleLinearOperator()
   //  only for noded that are non-Dirichlet
   //----------------------------------------------
 
-  if ( options()->f1.isPresent()) {
+  if (options()->f1.isPresent()) {
     ENUMERATE_ (Cell, icell, allCells()) {
       Cell cell = *icell;
       Real area = _computeAreaTriangle3(cell);
@@ -477,7 +474,7 @@ _assembleLinearOperator()
     }
   }
 
-  if ( options()->f2.isPresent()) {
+  if (options()->f2.isPresent()) {
     ENUMERATE_ (Cell, icell, allCells()) {
       Cell cell = *icell;
       Real area = _computeAreaTriangle3(cell);
@@ -503,7 +500,7 @@ _assembleLinearOperator()
     Real t1_val = bs->t1();
     Real t2_val = bs->t2();
 
-    if( bs->t1.isPresent() && bs->t2.isPresent()) {
+    if (bs->t1.isPresent() && bs->t2.isPresent()) {
       ENUMERATE_ (Face, iface, group) {
         Face face = *iface;
         Real length = _computeEdgeLength2(face);
@@ -521,8 +518,7 @@ _assembleLinearOperator()
       continue;
     }
 
-
-    if( bs->t1.isPresent()) {
+    if (bs->t1.isPresent()) {
       ENUMERATE_ (Face, iface, group) {
         Face face = *iface;
         Real length = _computeEdgeLength2(face);
@@ -536,9 +532,7 @@ _assembleLinearOperator()
       continue;
     }
 
-
-
-    if( bs->t2.isPresent()) {
+    if (bs->t2.isPresent()) {
       ENUMERATE_ (Face, iface, group) {
         Face face = *iface;
         Real length = _computeEdgeLength2(face);
@@ -551,7 +545,6 @@ _assembleLinearOperator()
       }
       continue;
     }
-
   }
 }
 
@@ -575,7 +568,7 @@ _computeEdgeLength2(Face face)
 {
   Real3 m0 = m_node_coord[face.nodeId(0)];
   Real3 m1 = m_node_coord[face.nodeId(1)];
-  return  math::sqrt((m1.x-m0.x)*(m1.x-m0.x) + (m1.y-m0.y)*(m1.y - m0.y));
+  return math::sqrt((m1.x - m0.x) * (m1.x - m0.x) + (m1.y - m0.y) * (m1.y - m0.y));
 }
 
 /*---------------------------------------------------------------------------*/
@@ -596,7 +589,7 @@ _computeElementMatrixTRIA3(Cell cell)
   Real3 m1 = m_node_coord[cell.nodeId(1)];
   Real3 m2 = m_node_coord[cell.nodeId(2)];
 
-  Real area = _computeAreaTriangle3(cell);    // calculate area
+  Real area = _computeAreaTriangle3(cell); // calculate area
 
   Real2 dPhi0(m1.y - m2.y, m2.x - m1.x);
   Real2 dPhi1(m2.y - m0.y, m0.x - m2.x);
@@ -606,21 +599,20 @@ _computeElementMatrixTRIA3(Cell cell)
   FixedMatrix<6, 1> bT_matrix;
   FixedMatrix<6, 6> int_Omega_i;
 
-  for (Int32 i = 0; i<6; i++)
-    for (Int32 j = 0; j<6; j++)
-      int_Omega_i(i,j) = 0.;
+  for (Int32 i = 0; i < 6; i++)
+    for (Int32 j = 0; j < 6; j++)
+      int_Omega_i(i, j) = 0.;
 
-// -----------------------------------------------------------------------------
-//  lambda( dx(u1)dx(v1) + dy(u2)dx(v1) + dx(u1)dy(v2) + dy(u2)dy(v2) ) + u2v2
-//------------------------------------------------------------------------------
-
+  // -----------------------------------------------------------------------------
+  //  lambda( dx(u1)dx(v1) + dy(u2)dx(v1) + dx(u1)dy(v2) + dy(u2)dy(v2) ) + u2v2
+  //------------------------------------------------------------------------------
 
   // dx(u1)dx(v1) //
-  b_matrix(0, 0) = dPhi0.x/area;
+  b_matrix(0, 0) = dPhi0.x / area;
   b_matrix(0, 1) = 0.;
-  b_matrix(0, 2) = dPhi1.x/area;
+  b_matrix(0, 2) = dPhi1.x / area;
   b_matrix(0, 3) = 0.;
-  b_matrix(0, 4) = dPhi2.x/area;
+  b_matrix(0, 4) = dPhi2.x / area;
   b_matrix(0, 5) = 0.;
 
   b_matrix.multInPlace(0.5f);
@@ -635,15 +627,15 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix.multInPlace(0.5f);
 
   FixedMatrix<6, 6> int_dxU1dxV1 = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_dxU1dxV1);
+  int_Omega_i = matrixAddition(int_Omega_i, int_dxU1dxV1);
 
   // dy(u2)dx(v1) //
   b_matrix(0, 0) = 0.;
-  b_matrix(0, 1) = dPhi0.y/area;
+  b_matrix(0, 1) = dPhi0.y / area;
   b_matrix(0, 2) = 0.;
-  b_matrix(0, 3) = dPhi1.y/area;
+  b_matrix(0, 3) = dPhi1.y / area;
   b_matrix(0, 4) = 0.;
-  b_matrix(0, 5) = dPhi2.y/area;
+  b_matrix(0, 5) = dPhi2.y / area;
 
   b_matrix.multInPlace(0.5f);
 
@@ -657,16 +649,14 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix.multInPlace(0.5f);
 
   FixedMatrix<6, 6> int_dyU1dyV1 = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_dyU1dyV1);
-
-
+  int_Omega_i = matrixAddition(int_Omega_i, int_dyU1dyV1);
 
   // dx(u1)dy(v2) //
-  b_matrix(0, 0) = dPhi0.x/area;
+  b_matrix(0, 0) = dPhi0.x / area;
   b_matrix(0, 1) = 0.;
-  b_matrix(0, 2) = dPhi1.x/area;
+  b_matrix(0, 2) = dPhi1.x / area;
   b_matrix(0, 3) = 0.;
-  b_matrix(0, 4) = dPhi2.x/area;
+  b_matrix(0, 4) = dPhi2.x / area;
   b_matrix(0, 5) = 0.;
 
   b_matrix.multInPlace(0.5f);
@@ -680,16 +670,16 @@ _computeElementMatrixTRIA3(Cell cell)
 
   bT_matrix.multInPlace(0.5f);
 
-  FixedMatrix<6, 6> int_dxU2dxV1  = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_dxU2dxV1);
+  FixedMatrix<6, 6> int_dxU2dxV1 = matrixMultiplication(bT_matrix, b_matrix);
+  int_Omega_i = matrixAddition(int_Omega_i, int_dxU2dxV1);
 
   // dy(u2)dy(v2) //
   b_matrix(0, 0) = 0.;
-  b_matrix(0, 1) = dPhi0.y/area;
+  b_matrix(0, 1) = dPhi0.y / area;
   b_matrix(0, 2) = 0.;
-  b_matrix(0, 3) = dPhi1.y/area;
+  b_matrix(0, 3) = dPhi1.y / area;
   b_matrix(0, 4) = 0.;
-  b_matrix(0, 5) = dPhi2.y/area;
+  b_matrix(0, 5) = dPhi2.y / area;
 
   b_matrix.multInPlace(0.5f);
 
@@ -702,25 +692,24 @@ _computeElementMatrixTRIA3(Cell cell)
 
   bT_matrix.multInPlace(0.5f);
 
-  FixedMatrix<6, 6> int_dyU2dyV1  = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_dyU2dyV1);
+  FixedMatrix<6, 6> int_dyU2dyV1 = matrixMultiplication(bT_matrix, b_matrix);
+  int_Omega_i = matrixAddition(int_Omega_i, int_dyU2dyV1);
 
   // lambda * (.....)
   int_Omega_i.multInPlace(lambda);
 
-
-// -----------------------------------------------------------------------------
-//  2*mu( dx(u1)dx(v1) + dy(u2)dy(v2) + 0.5*(   dy(u1)dy(v1) + dx(u2)dy(v1)
-//                                            + dy(u1)dx(v2) + dx(u2)dx(v2) )
-//      )
-//------------------------------------------------------------------------------
+  // -----------------------------------------------------------------------------
+  //  2*mu( dx(u1)dx(v1) + dy(u2)dy(v2) + 0.5*(   dy(u1)dy(v1) + dx(u2)dy(v1)
+  //                                            + dy(u1)dx(v2) + dx(u2)dx(v2) )
+  //      )
+  //------------------------------------------------------------------------------
 
   // mu*dx(u1)dx(v1) //
-  b_matrix(0, 0) = dPhi0.x/area;
+  b_matrix(0, 0) = dPhi0.x / area;
   b_matrix(0, 1) = 0.;
-  b_matrix(0, 2) = dPhi1.x/area;
+  b_matrix(0, 2) = dPhi1.x / area;
   b_matrix(0, 3) = 0.;
-  b_matrix(0, 4) = dPhi2.x/area;
+  b_matrix(0, 4) = dPhi2.x / area;
   b_matrix(0, 5) = 0.;
 
   b_matrix.multInPlace(0.5f);
@@ -732,19 +721,18 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix(4, 0) = dPhi2.x;
   bT_matrix(5, 0) = 0.;
 
-  bT_matrix.multInPlace(0.5f*mu2);
+  bT_matrix.multInPlace(0.5f * mu2);
 
   FixedMatrix<6, 6> int_mudxU1dxV1 = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_mudxU1dxV1);
-
+  int_Omega_i = matrixAddition(int_Omega_i, int_mudxU1dxV1);
 
   // mu*dy(u2)dy(v2) //
   b_matrix(0, 0) = 0.;
-  b_matrix(0, 1) = dPhi0.y/area;
+  b_matrix(0, 1) = dPhi0.y / area;
   b_matrix(0, 2) = 0.;
-  b_matrix(0, 3) = dPhi1.y/area;
+  b_matrix(0, 3) = dPhi1.y / area;
   b_matrix(0, 4) = 0.;
-  b_matrix(0, 5) = dPhi2.y/area;
+  b_matrix(0, 5) = dPhi2.y / area;
 
   b_matrix.multInPlace(0.5f);
 
@@ -755,17 +743,17 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix(4, 0) = 0.;
   bT_matrix(5, 0) = dPhi2.y;
 
-  bT_matrix.multInPlace(0.5f*mu2);
+  bT_matrix.multInPlace(0.5f * mu2);
 
-  FixedMatrix<6, 6> int_mudyU2dyV2  = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_mudyU2dyV2);
+  FixedMatrix<6, 6> int_mudyU2dyV2 = matrixMultiplication(bT_matrix, b_matrix);
+  int_Omega_i = matrixAddition(int_Omega_i, int_mudyU2dyV2);
 
   // 0.5*0.5*mu*dy(u1)dy(v1) //
-  b_matrix(0, 0) = dPhi0.y/area;
+  b_matrix(0, 0) = dPhi0.y / area;
   b_matrix(0, 1) = 0.;
-  b_matrix(0, 2) = dPhi1.y/area;
+  b_matrix(0, 2) = dPhi1.y / area;
   b_matrix(0, 3) = 0.;
-  b_matrix(0, 4) = dPhi2.y/area;
+  b_matrix(0, 4) = dPhi2.y / area;
   b_matrix(0, 5) = 0.;
 
   b_matrix.multInPlace(0.5f);
@@ -777,19 +765,18 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix(4, 0) = dPhi2.y;
   bT_matrix(5, 0) = 0.;
 
-  bT_matrix.multInPlace(0.25f*mu2);
+  bT_matrix.multInPlace(0.25f * mu2);
 
-  FixedMatrix<6, 6> int_mudyU1dyV1  = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_mudyU1dyV1);
-
+  FixedMatrix<6, 6> int_mudyU1dyV1 = matrixMultiplication(bT_matrix, b_matrix);
+  int_Omega_i = matrixAddition(int_Omega_i, int_mudyU1dyV1);
 
   // 0.5*mu*dx(u2)dy(v1) //
   b_matrix(0, 0) = 0.;
-  b_matrix(0, 1) = dPhi0.x/area;
+  b_matrix(0, 1) = dPhi0.x / area;
   b_matrix(0, 2) = 0.;
-  b_matrix(0, 3) = dPhi1.x/area;
+  b_matrix(0, 3) = dPhi1.x / area;
   b_matrix(0, 4) = 0.;
-  b_matrix(0, 5) = dPhi2.x/area;
+  b_matrix(0, 5) = dPhi2.x / area;
 
   b_matrix.multInPlace(0.5f);
 
@@ -800,17 +787,17 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix(4, 0) = dPhi2.y;
   bT_matrix(5, 0) = 0.;
 
-  bT_matrix.multInPlace(0.25f*mu2);
+  bT_matrix.multInPlace(0.25f * mu2);
 
-  FixedMatrix<6, 6> int_mudxU2dyV1  = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_mudxU2dyV1);
+  FixedMatrix<6, 6> int_mudxU2dyV1 = matrixMultiplication(bT_matrix, b_matrix);
+  int_Omega_i = matrixAddition(int_Omega_i, int_mudxU2dyV1);
 
   // 0.5*mu*dy(u1)dx(v2) //
-  b_matrix(0, 0) = dPhi0.y/area;
+  b_matrix(0, 0) = dPhi0.y / area;
   b_matrix(0, 1) = 0.;
-  b_matrix(0, 2) = dPhi1.y/area;
+  b_matrix(0, 2) = dPhi1.y / area;
   b_matrix(0, 3) = 0.;
-  b_matrix(0, 4) = dPhi2.y/area;
+  b_matrix(0, 4) = dPhi2.y / area;
   b_matrix(0, 5) = 0.;
 
   b_matrix.multInPlace(0.5f);
@@ -822,18 +809,18 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix(4, 0) = 0.;
   bT_matrix(5, 0) = dPhi2.x;
 
-  bT_matrix.multInPlace(0.25f*mu2);
+  bT_matrix.multInPlace(0.25f * mu2);
 
-  FixedMatrix<6, 6> int_mudyU1dxV2  = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_mudyU1dxV2);
+  FixedMatrix<6, 6> int_mudyU1dxV2 = matrixMultiplication(bT_matrix, b_matrix);
+  int_Omega_i = matrixAddition(int_Omega_i, int_mudyU1dxV2);
 
   // 0.5*mu*dx(u2)dx(v2) //
   b_matrix(0, 0) = 0.;
-  b_matrix(0, 1) = dPhi0.x/area;
+  b_matrix(0, 1) = dPhi0.x / area;
   b_matrix(0, 2) = 0.;
-  b_matrix(0, 3) = dPhi1.x/area;
+  b_matrix(0, 3) = dPhi1.x / area;
   b_matrix(0, 4) = 0.;
-  b_matrix(0, 5) = dPhi2.x/area;
+  b_matrix(0, 5) = dPhi2.x / area;
 
   b_matrix.multInPlace(0.5f);
 
@@ -844,10 +831,10 @@ _computeElementMatrixTRIA3(Cell cell)
   bT_matrix(4, 0) = 0.;
   bT_matrix(5, 0) = dPhi2.x;
 
-  bT_matrix.multInPlace(0.25f*mu2);
+  bT_matrix.multInPlace(0.25f * mu2);
 
-  FixedMatrix<6, 6> int_mudxU2dxV2  = matrixMultiplication(bT_matrix, b_matrix);
-  int_Omega_i = matrixAddition( int_Omega_i, int_mudxU2dxV2);
+  FixedMatrix<6, 6> int_mudxU2dxV2 = matrixMultiplication(bT_matrix, b_matrix);
+  int_Omega_i = matrixAddition(int_Omega_i, int_mudxU2dxV2);
 
   //info() << "Cell=" << cell.localId();
   //std::cout << " int_cdPi_dPj=";
@@ -870,7 +857,7 @@ _assembleBilinearOperatorTRIA3()
     if (cell.type() != IT_Triangle3)
       ARCANE_FATAL("Only Triangle3 cell type is supported");
 
-    auto K_e = _computeElementMatrixTRIA3(cell);  // element stiffness matrix
+    auto K_e = _computeElementMatrixTRIA3(cell); // element stiffness matrix
     // assemble elementary matrix into the global one elementary terms are
     // positioned into K according to the rank  of  associated  node in the
     // mesh.nodes list and according the dof  number. Here  for  each  node
@@ -881,9 +868,9 @@ _assembleBilinearOperatorTRIA3()
     for (Node node1 : cell.nodes()) {
       Int32 n2_index = 0;
       for (Node node2 : cell.nodes()) {
-        Real v1 = K_e(2 * n1_index    , 2 * n2_index    );
-        Real v2 = K_e(2 * n1_index    , 2 * n2_index + 1);
-        Real v3 = K_e(2 * n1_index + 1, 2 * n2_index    );
+        Real v1 = K_e(2 * n1_index, 2 * n2_index);
+        Real v2 = K_e(2 * n1_index, 2 * n2_index + 1);
+        Real v3 = K_e(2 * n1_index + 1, 2 * n2_index);
         Real v4 = K_e(2 * n1_index + 1, 2 * n2_index + 1);
         // m_k_matrix(node1.localId(), node2.localId()) += v;
         if (node1.isOwn()) {
@@ -891,7 +878,7 @@ _assembleBilinearOperatorTRIA3()
           DoFLocalId node1_dof2 = node_dof.dofId(node1, 1);
           DoFLocalId node2_dof1 = node_dof.dofId(node2, 0);
           DoFLocalId node2_dof2 = node_dof.dofId(node2, 1);
-//          m_linear_system.matrixAddValue(node_dof.dofId(node1, 0), node_dof.dofId(node2, 0), v);
+          //          m_linear_system.matrixAddValue(node_dof.dofId(node1, 0), node_dof.dofId(node2, 0), v);
           m_linear_system.matrixAddValue(node1_dof1, node2_dof1, v1);
           m_linear_system.matrixAddValue(node1_dof1, node2_dof2, v2);
           m_linear_system.matrixAddValue(node1_dof2, node2_dof1, v3);

@@ -28,6 +28,8 @@
 
 #include "CsrFormatMatrix.h"
 
+#include "CsrFormatVec.h"
+
 #include "IDoFLinearSystemFactory.h"
 #include "Fem_axl.h"
 #include "FemUtils.h"
@@ -95,6 +97,7 @@
 #include "arcane/utils/ValueConvert.h"
 
 #include <arcane/core/MeshUtils.h>
+#include "ArcaneFemFunctions.h"
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -120,6 +123,7 @@ class FemModule
   , m_dofs_on_nodes(mbi.subDomain()->traceMng())
   , m_coo_matrix(mbi.subDomain())
   , m_csr_matrix(mbi.subDomain())
+  , m_csr_vec_matrix(mbi.subDomain(), mesh(), acceleratorMng()->defaultRunner(), &m_dofs_on_nodes)
   , m_time_stats(mbi.subDomain()->timeStats())
   {
     ICaseMng* cm = mbi.subDomain()->caseMng();
@@ -177,6 +181,8 @@ class FemModule
   CooFormat m_coo_matrix;
 
   CsrFormat m_csr_matrix;
+
+  CsrFormatVec m_csr_vec_matrix;
 
   NumArray<Real, MDDim1> m_rhs_vect;
 
@@ -295,7 +301,12 @@ class FemModule
   static ARCCORE_HOST_DEVICE Real
   _computeCellMatrixGpuTETRA4(CellLocalId icell, IndexedCellNodeConnectivityView cnc,
                               ax::VariableNodeReal3InView in_node_coord, Real b_matrix[12]);
+
+  ARCCORE_HOST_DEVICE FixedMatrix<4, 4>
+  _computeElementMatrixTetra4(CellLocalId icell, const IndexedCellNodeConnectivityView& cnc, const ax::VariableNodeReal3InView& in_node_coord);
+
   static ARCCORE_HOST_DEVICE inline Real
+
   _computeCellMatrixGpuTRIA3(CellLocalId icell, IndexedCellNodeConnectivityView cnc,
                              ax::VariableNodeReal3InView in_node_coord, Real b_matrix[6]);
   static ARCCORE_HOST_DEVICE void
