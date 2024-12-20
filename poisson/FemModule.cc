@@ -640,9 +640,20 @@ _assembleLinearOperator(BSRMatrix<1>* bsr_matrix)
   // Temporary variable to keep values for the RHS part of the linear system
   VariableDoFReal& rhs_values(m_linear_system.rhsVariable());
   rhs_values.fill(0.0);
-
   auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
 
+  if (m_use_csr) {
+  m_rhs_vect.resize(nbNode());
+  m_rhs_vect.fill(0.0);
+
+  std::array<VariableNodeByte, 1> u_dirichlet_arr = { m_u_dirichlet };
+
+  auto method = options()->enforceDirichletMethod();
+  m_bsr_format.applyDirichlet(options()->enforceDirichletMethod(), options()->penalty(), m_rhs_vect, u_dirichlet_arr, m_u, &m_linear_system);
+
+  _translateRhs();
+  }
+  else {
   if (options()->enforceDirichletMethod() == "Penalty") {
 
     Timer::Action timer_action(m_time_stats, "Penalty");
@@ -760,6 +771,7 @@ _assembleLinearOperator(BSRMatrix<1>* bsr_matrix)
            << "  - WeakPenalty\n"
            << "  - RowElimination\n"
            << "  - RowColumnElimination\n";
+  }
   }
 
   {

@@ -53,6 +53,7 @@
 #include "arcane/accelerator/VariableViews.h"
 #include <arcane/accelerator/Atomic.h>
 #include <arcane/accelerator/Scan.h>
+#include <type_traits>
 
 #include "DoFLinearSystem.h"
 #include "CsrFormatMatrix.h"
@@ -824,8 +825,8 @@ class BSRFormat : public TraceAccessor
   /*---------------------------------------------------------------------------*/
   /*---------------------------------------------------------------------------*/
 
-  template <bool IS_WEAK, bool USE_CSR_IN_LINEAR_SYSTEM>
-  void applyDirichletByPenalty(Real penalty, NumArray<Real, MDDim1>& rhs_vect, std::array<VariableNodeByte, NB_DOF>& u_dirichlet_var_arr, VariableNodeReal u)
+  template <bool IS_WEAK, bool USE_CSR_IN_LINEAR_SYSTEM, typename DataType>
+  void applyDirichletViaPenalty(Real penalty, NumArray<Real, MDDim1>& rhs_vect, std::array<VariableNodeByte, NB_DOF>& u_dirichlet_var_arr, MeshVariableScalarRefT<Node, DataType> u)
   {
     auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
     auto nb_row = m_bsr_matrix.nbRow();
@@ -876,11 +877,15 @@ class BSRFormat : public TraceAccessor
   /*---------------------------------------------------------------------------*/
 
   template <bool ELIMINATE_BY_ROW_N_COLUMN, typename DataType>
-  void applyDirichletByElimination(std::array<VariableNodeByte, NB_DOF>& u_dirichlet_var_arr, MeshVariableScalarRefT<Node, DataType> u, DoFLinearSystem& linear_system)
+  void applyDirichletViaElimination(std::array<VariableNodeByte, NB_DOF>& u_dirichlet_var_arr, MeshVariableScalarRefT<Node, DataType> u, DoFLinearSystem* linear_system)
   {
     auto node_dof(m_dofs_on_nodes.nodeDoFConnectivityView());
     auto command = makeCommand(m_queue);
     auto in_u = viewIn(command, u);
+    VariableDoFByte m_dof_elimination_info(VariableBuildInfo(m_dofs_on_nodes.dofFamily(), "BSRFormatDoFEliminationInfo"));
+    VariableDoFReal m_dof_elimination_value(VariableBuildInfo(m_dofs_on_nodes.dofFamily(), "BSRFormatDoFEliminationValue"));
+    auto in_out_dof_elimination_info = viewInOut(command, m_dof_elimination_info);
+    auto in_out_dof_elimination_value = viewInOut(command, m_dof_elimination_value);
 
     NumArray<Accelerator::ItemVariableScalarInViewT<Node, Byte>, MDDim1> in_u_dirichlet_view_arr;
     in_u_dirichlet_view_arr.resize(NB_DOF);
@@ -888,42 +893,46 @@ class BSRFormat : public TraceAccessor
       in_u_dirichlet_view_arr[i] = viewIn(command, u_dirichlet_var_arr[i]);
     auto in_u_dirichlet_arr = viewIn(command, in_u_dirichlet_view_arr);
 
-    /*auto eliminateInLinearSystem = [&linear_system] ARCCORE_HOST_DEVICE(DoFLocalId dof_lid, Real u_dirichlet) {
-      if constexpr (ELIMINATE_BY_ROW_N_COLUMN)
-        linear_system.eliminateRowColumn(dof_lid, u_dirichlet);
-      else
-        linear_system.eliminateRow(dof_lid, u_dirichlet);
-    };*/
-
-    command << RUNCOMMAND_ENUMERATE(NodeLocalId, node_lid, m_mesh->ownNodes())
-    {
-      for (auto i = 0; i < NB_DOF; ++i) {
-        if ((in_u_dirichlet_arr[i])[node_lid]) {
-          DoFLocalId dof_lid = node_dof.dofId(node_lid, i);
-          Real u_dirichlet = in_u[node_lid][i];
-          /*if (ELIMINATE_BY_ROW_N_COLUMN)
-            linear_system.eliminateRowColumn(dof_lid, u_dirichlet);
-          else
-            linear_system.eliminateRow(dof_lid, u_dirichlet);*/
+    if constexpr (std::is_floating_point<DataType>::value) {
+      command << RUNCOMMAND_ENUMERATE(NodeLocalId, node_lid, m_mesh->ownNodes())
+      {
+        for (auto i = 0; i < NB_DOF; ++i) {
+          if ((in_u_dirichlet_arr[i])[node_lid]) {
+            DoFLocalId dof_lid = node_dof.dofId(node_lid, i);
+            Real u_dirichlet = in_u[node_lid];
+            if (!ELIMINATE_BY_ROW_N_COLUMN) {
+              in_out_dof_elimination_info[dof_lid] = 1; // How to define constant on device code ? ELIMINATE_ROW;
+              in_out_dof_elimination_value[dof_lid] = u_dirichlet;
+            }
+          }
         }
-      }
-    };
+      };
+    }
+    else
+      ARCANE_THROW(NotImplementedException, "BSRFormat(applyDirichletByElimination): Method not supported!");
+
+    linear_system->setEliminationArrays(m_dof_elimination_info, m_dof_elimination_value);
   }
 
   /*---------------------------------------------------------------------------*/
   /*---------------------------------------------------------------------------*/
 
-  void assembleLinearOperator(Arcane::String method, Real penalty, NumArray<Real, MDDim1>& rhs_vect, std::array<VariableNodeByte, NB_DOF>& u_dirichlet_arr, VariableNodeReal u)
+  template <typename DataType>
+  void applyDirichlet(Arcane::String method, Real penalty, NumArray<Real, MDDim1>& rhs_vect, std::array<VariableNodeByte, NB_DOF>& u_dirichlet_arr, MeshVariableScalarRefT<Node, DataType> u, DoFLinearSystem* linear_system)
   {
 
     if (method == "Penalty") {
-      m_use_csr_in_linear_system ? applyDirichletByPenalty<false, true>(penalty, rhs_vect, u_dirichlet_arr, u)
-                                 : applyDirichletByPenalty<false, false>(penalty, rhs_vect, u_dirichlet_arr, u);
+      m_use_csr_in_linear_system ? applyDirichletViaPenalty<false, true, DataType>(penalty, rhs_vect, u_dirichlet_arr, u)
+                                 : applyDirichletViaPenalty<false, false, DataType>(penalty, rhs_vect, u_dirichlet_arr, u);
     }
     else if (method == "WeaKPenalty") {
-      m_use_csr_in_linear_system ? applyDirichletByPenalty<true, true>(penalty, rhs_vect, u_dirichlet_arr, u)
-                                 : applyDirichletByPenalty<true, false>(penalty, rhs_vect, u_dirichlet_arr, u);
+      m_use_csr_in_linear_system ? applyDirichletViaPenalty<true, true, DataType>(penalty, rhs_vect, u_dirichlet_arr, u)
+                                 : applyDirichletViaPenalty<true, false, DataType>(penalty, rhs_vect, u_dirichlet_arr, u);
     }
+    else if (method == "RowElimination")
+      applyDirichletViaElimination<false, DataType>(u_dirichlet_arr, u, linear_system);
+    else if (method == "RowColumnElimination")
+      applyDirichletViaElimination<true, DataType>(u_dirichlet_arr, u, linear_system);
     else
       ARCANE_THROW(NotImplementedException, "BSRFormat(assembleLinearOperator): Method not supported!");
   }

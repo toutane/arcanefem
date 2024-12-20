@@ -98,6 +98,7 @@
 #include <arcane/core/MeshUtils.h>
 #include "BSRFormat.h"
 #include "ArcaneFemFunctionsGpu.h"
+#include "arcane/core/VariableTypedef.h"
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
