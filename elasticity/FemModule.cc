@@ -139,7 +139,34 @@ startInit()
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-ARCCORE_HOST_DEVICE FixedMatrix<6, 6> computeElementMatrixTRIA3Gpu(CellLocalId cell_lid, const IndexedCellNodeConnectivityView& cn_cv, const Accelerator::VariableNodeReal3InView& in_node_coord, Real lambda, Real mu2);
+ARCCORE_HOST_DEVICE FixedMatrix<6, 6> computeElementMatrixTRIA3Gpu(CellLocalId cell_lid, const IndexedCellNodeConnectivityView& cn_cv, const Accelerator::VariableNodeReal3InView& in_node_coord, Real lambda, Real mu2)
+{
+  auto dPhiX = Arcane::FemUtils::Gpu::FeOperation2D::computeGradientXTria3(cell_lid, cn_cv, in_node_coord);
+  auto dPhiY = Arcane::FemUtils::Gpu::FeOperation2D::computeGradientYTria3(cell_lid, cn_cv, in_node_coord);
+
+  FixedMatrix<1, 6> dxU1 = { dPhiX[0], 0, dPhiX[1], 0, dPhiX[2], 0 };
+  FixedMatrix<1, 6> dyU1 = { dPhiY[0], 0, dPhiY[1], 0, dPhiY[2], 0 };
+  FixedMatrix<6, 1> dxV1 = matrixTranspose(dxU1);
+  FixedMatrix<6, 1> dyV1 = matrixTranspose(dyU1);
+
+  FixedMatrix<1, 6> dxU2 = { 0, dPhiX[0], 0, dPhiX[1], 0, dPhiX[2] };
+  FixedMatrix<1, 6> dyU2 = { 0, dPhiY[0], 0, dPhiY[1], 0, dPhiY[2] };
+  FixedMatrix<6, 1> dxV2 = matrixTranspose(dxU2);
+  FixedMatrix<6, 1> dyV2 = matrixTranspose(dyU2);
+
+  // -----------------------------------------------------------------------------
+  //  (dx(u1)dx(v1) + dy(u2)dx(v1) + dx(u1)dy(v2) + dy(u2)dy(v2)) * lambda
+  //------------------------------------------------------------------------------
+  FixedMatrix<6, 6> first_term = ((dxV1 ^ dxU1) + (dxV1 ^ dyU2) + (dyV2 ^ dxU1) + (dyV2 ^ dyU2)) * lambda;
+
+  // -----------------------------------------------------------------------------
+  //  2*mu * (dx(u1)dx(v1) + dy(u2)dy(v2) + 0.5 *
+  //                  (dy(u1)dy(v1) + dx(u2)dy(v1) + dy(u1)dx(v2) + dx(u2)dx(v2)))
+  //------------------------------------------------------------------------------
+  FixedMatrix<6, 6> second_term = (((dxV1 ^ dxU1) + (dyV2 ^ dyU2)) + ((dyV1 ^ dyU1) + (dyV1 ^ dxU2) + (dxV2 ^ dyU1) + (dxV2 ^ dxU2)) * 0.5) * mu2;
+
+  return first_term + second_term;
+}
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -624,7 +651,7 @@ _computeEdgeLength2(Face face)
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-ARCCORE_HOST_DEVICE FixedMatrix<6, 6> computeElementMatrixTRIA3Base(Real3 m0, Real3 m1, Real3 m2, Real area, Real mu2, Real lambda)
+FixedMatrix<6, 6> FemModule::_computeElementMatrixTRIA3(Cell cell)
 {
   // Get coordiantes of the triangle element  TRI3
   //------------------------------------------------
@@ -634,6 +661,13 @@ ARCCORE_HOST_DEVICE FixedMatrix<6, 6> computeElementMatrixTRIA3Base(Real3 m0, Re
   //                 .     .
   //              1 o . . . o 2
   //------------------------------------------------
+
+  Real3 m0 = m_node_coord[cell.nodeId(0)];
+  Real3 m1 = m_node_coord[cell.nodeId(1)];
+  Real3 m2 = m_node_coord[cell.nodeId(2)];
+
+  Real area = _computeAreaTriangle3(cell); // calculate area
+
   Real2 dPhi0(m1.y - m2.y, m2.x - m1.x);
   Real2 dPhi1(m2.y - m0.y, m0.x - m2.x);
   Real2 dPhi2(m0.y - m1.y, m1.x - m0.x);
@@ -891,28 +925,6 @@ ARCCORE_HOST_DEVICE FixedMatrix<6, 6> computeElementMatrixTRIA3Base(Real3 m0, Re
   //std::cout << "\n";
 
   return int_Omega_i;
-}
-
-/*---------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
-
-ARCCORE_HOST_DEVICE FixedMatrix<6, 6> computeElementMatrixTRIA3Gpu(CellLocalId cell_lid, const IndexedCellNodeConnectivityView& cn_cv, const Accelerator::VariableNodeReal3InView& in_node_coord, Real lambda, Real mu2) {
-    Real3 m0 = in_node_coord[cn_cv.nodeId(cell_lid, 0)];
-    Real3 m1 = in_node_coord[cn_cv.nodeId(cell_lid, 1)];
-    Real3 m2 = in_node_coord[cn_cv.nodeId(cell_lid, 2)];
-    Real area = Arcane::FemUtils::Gpu::MeshOperation::computeAreaTria3(cell_lid, cn_cv, in_node_coord);
-    return computeElementMatrixTRIA3Base(m0, m1, m2, area, mu2, lambda);
-}
-
-/*---------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
-
-FixedMatrix<6, 6> FemModule::_computeElementMatrixTRIA3(Cell cell) {
-    Real3 m0 = m_node_coord[cell.nodeId(0)];
-    Real3 m1 = m_node_coord[cell.nodeId(1)];
-    Real3 m2 = m_node_coord[cell.nodeId(2)];
-    Real area = _computeAreaTriangle3(cell);
-    return computeElementMatrixTRIA3Base(m0, m1, m2, area, mu2, lambda);
 }
 
 /*---------------------------------------------------------------------------*/
