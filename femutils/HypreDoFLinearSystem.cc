@@ -13,6 +13,7 @@
 
 #include "DoFLinearSystem.h"
 
+#include <arcane/accelerator/MaterialVariableViews.h>
 #include <arcane/utils/FatalErrorException.h>
 #include <arcane/utils/NumArray.h>
 #include <arcane/utils/PlatformUtils.h>
@@ -30,11 +31,13 @@
 
 #include <arcane/accelerator/core/Runner.h>
 #include <arcane/accelerator/core/Memory.h>
+#include <arcane/accelerator/RunCommandLoop.h>
+#include <arcane/accelerator/NumArrayViews.h>
 
 #include "FemUtils.h"
 #include "IDoFLinearSystemFactory.h"
 
-#include "HypreDoFLinearSystemFactory_axl.h"
+#include "../build/femutils/HypreDoFLinearSystemFactory_axl.h"
 
 #include <HYPRE.h>
 #include <HYPRE_parcsr_ls.h>
@@ -95,11 +98,15 @@ class HypreDoFLinearSystemImpl
   , m_rhs_variable(VariableBuildInfo(dof_family, solver_name + "RHSVariable"))
   , m_dof_variable(VariableBuildInfo(dof_family, solver_name + "SolutionVariable"))
   , m_dof_matrix_indexes(VariableBuildInfo(m_dof_family, solver_name + "DoFMatrixIndexes"))
-  , m_dof_elimination_info(VariableBuildInfo(m_dof_family, solver_name + "DoFEliminationInfo"))
-  , m_dof_elimination_value(VariableBuildInfo(m_dof_family, solver_name + "DoFEliminationValue"))
+  //, m_dof_elimination_info(VariableBuildInfo(m_dof_family, solver_name + "DoFEliminationInfo"))
+  //, m_dof_elimination_value(VariableBuildInfo(m_dof_family, solver_name + "DoFEliminationValue"))
   , m_dof_matrix_numbering(VariableBuildInfo(dof_family, solver_name + "MatrixNumbering"))
   {
     info() << "Creating HypreDoFLinearSystemImpl()";
+    m_dof_elimination_info.resize(dof_family->nbItem());
+    m_dof_elimination_value.resize(dof_family->nbItem());
+    m_dof_elimination_info.fill(ELIMINATE_NONE);
+    m_dof_elimination_value.fill(0.0);
   }
 
   ~HypreDoFLinearSystemImpl()
@@ -109,6 +116,9 @@ class HypreDoFLinearSystemImpl
     HYPRE_Finalize(); /* must be the last HYPRE function call */
 #endif
   }
+
+  static constexpr Byte ELIMINATE_NONE = 0;
+  static constexpr Byte ELIMINATE_ROW_COLUMN = 2;
 
  public:
 
@@ -138,7 +148,94 @@ class HypreDoFLinearSystemImpl
 
   void eliminateRowColumn(DoFLocalId row, Real value) override
   {
-    ARCANE_THROW(NotImplementedException, "");
+    if (row.isNull())
+      ARCANE_FATAL("Row is null");
+    m_dof_elimination_info[row] = ELIMINATE_ROW_COLUMN;
+    m_dof_elimination_value[row] = value;
+    info() << "EliminateRowColumn row=" << row.localId() << " v=" << value;
+  }
+
+  void _applyElimination()
+  {
+    auto nb_node = this->m_csr_view.rows().size();
+    RunQueue q = makeQueue(m_runner);
+    {
+      auto command = makeCommand(q);
+      auto in_dof_elimination_info = viewIn(command, m_dof_elimination_info);
+      auto in_dof_elimination_value = viewIn(command, m_dof_elimination_value);
+      auto in_row_index = m_csr_view.rows();
+      auto in_columns = m_csr_view.columns();
+      auto inout_values = m_csr_view.values();
+      command << RUNCOMMAND_LOOP1(iter, nb_node)
+      {
+        auto [thread_id] = iter();
+        if (in_dof_elimination_info[thread_id] == ELIMINATE_ROW_COLUMN) {
+          info() << "apply for row: " << thread_id;
+          auto start = in_row_index[thread_id];
+          auto end = thread_id == nb_node - 1 ? in_columns.size() : in_row_index[thread_id + 1];
+          for (auto i = start; i < end; ++i) {
+            inout_values[i] = in_dof_elimination_value[thread_id];
+          }
+
+          // RHS
+        }
+      };
+    };
+    q.barrier();
+    {
+      for (auto row = 0; row < nb_node; ++row) {
+        if (m_dof_elimination_info[row] == ELIMINATE_ROW_COLUMN) {
+          {
+            auto command = makeCommand(q);
+            auto in_dof_elimination_info = viewIn(command, m_dof_elimination_info);
+            auto in_dof_elimination_value = viewIn(command, m_dof_elimination_value);
+            auto in_row_index = m_csr_view.rows();
+            auto in_columns = m_csr_view.columns();
+            auto inout_values = m_csr_view.values();
+            command << RUNCOMMAND_LOOP1(iter, nb_node)
+            {
+              auto [thread_id] = iter();
+              auto start = in_row_index[thread_id];
+              auto end = thread_id == nb_node - 1 ? in_columns.size() : in_row_index[thread_id + 1];
+              for (auto i = start; i < end; ++i) {
+                if (in_columns[i] == row) {
+                  inout_values[i] = in_dof_elimination_value[row];
+                }
+              }
+            };
+          }
+        }
+      }
+    }
+    q.barrier();
+
+    {
+      for (auto row = 0; row < nb_node; ++row) {
+        if (m_dof_elimination_info[row] == ELIMINATE_ROW_COLUMN) {
+          {
+            auto command = makeCommand(q);
+            auto in_dof_elimination_info = viewIn(command, m_dof_elimination_info);
+            auto in_dof_elimination_value = viewIn(command, m_dof_elimination_value);
+            auto in_row_index = m_csr_view.rows();
+            auto in_columns = m_csr_view.columns();
+            auto inout_values = m_csr_view.values();
+            command << RUNCOMMAND_LOOP1(iter, nb_node)
+            {
+              auto [thread_id] = iter();
+              auto start = in_row_index[thread_id];
+              auto end = thread_id == nb_node - 1 ? in_columns.size() : in_row_index[thread_id + 1];
+              for (auto i = start; i < end; ++i) {
+                if (in_columns[i] == row) {
+                  if (thread_id == row) {
+                    inout_values[i] = 1;
+                  }
+                }
+              }
+            };
+          }
+        }
+      }
+    }
   }
 
   void solve() override;
@@ -188,8 +285,10 @@ class HypreDoFLinearSystemImpl
   VariableDoFReal m_rhs_variable;
   VariableDoFReal m_dof_variable;
   VariableDoFInt32 m_dof_matrix_indexes;
-  VariableDoFByte m_dof_elimination_info;
-  VariableDoFReal m_dof_elimination_value;
+  //VariableDoFByte m_dof_elimination_info;
+  //VariableDoFReal m_dof_elimination_value;
+  NumArray<Int32, MDDim1> m_dof_elimination_info;
+  NumArray<Int32, MDDim1> m_dof_elimination_value;
   VariableDoFInt32 m_dof_matrix_numbering;
   NumArray<Int32, MDDim1> m_parallel_columns_index;
   NumArray<Int32, MDDim1> m_parallel_rows_index;
@@ -261,14 +360,14 @@ _computeMatrixNumerotation()
 
 namespace
 {
-template<typename DataType>
-void _doCopy(NumArray<DataType,MDDim1>& num_array,Span<const DataType> rhs,RunQueue* q)
-{
-  num_array.resize(rhs.size());
-  MemoryUtils::copy(num_array.to1DSpan(),rhs,q);
-}
+  template <typename DataType>
+  void _doCopy(NumArray<DataType, MDDim1>& num_array, Span<const DataType> rhs, RunQueue* q)
+  {
+    num_array.resize(rhs.size());
+    MemoryUtils::copy(num_array.to1DSpan(), rhs, q);
+  }
 
-}
+} // namespace
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -276,6 +375,9 @@ void _doCopy(NumArray<DataType,MDDim1>& num_array,Span<const DataType> rhs,RunQu
 void HypreDoFLinearSystemImpl::
 solve()
 {
+  // NOTE: Is it a good place to do it ? Could be done later...
+  _applyElimination();
+
 #if HYPRE_RELEASE_NUMBER >= 22700
   HYPRE_MemoryLocation hypre_memory = HYPRE_MEMORY_HOST;
   HYPRE_ExecutionPolicy hypre_exec_policy = HYPRE_EXEC_HOST;
@@ -354,8 +456,8 @@ solve()
   HYPRE_IJMatrix ij_A = nullptr;
   HYPRE_ParCSRMatrix parcsr_A = nullptr;
 
-  const bool do_debug_print = false;
-  const bool do_dump_matrix = false;
+  const bool do_debug_print = true;
+  const bool do_dump_matrix = true;
 
   Span<const Int32> rows_index_span = m_dof_matrix_numbering.asArray();
   const Int32 nb_local_row = rows_index_span.size();

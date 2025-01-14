@@ -41,10 +41,11 @@
       <u>NULL 0.0</u>
     </dirichlet-point-condition>
     <result-file>check/elasticity_point-dirichlet_bar_test_ref.txt</result-file>
-    <linear-system>
-      <solver-backend>hypre</solver-backend>
-      <solver-method>bicgstab</solver-method>
-      <epsilon>1e-10</epsilon>
+    <bsr>true</bsr>
+    <linear-system name="HypreLinearSystem">
+      <rtol>0.</rtol>
+      <atol>1e-15</atol>
+      <amg-threshold>0.25</amg-threshold>
     </linear-system>
   </fem>
 </case>
