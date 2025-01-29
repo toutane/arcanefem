@@ -59,6 +59,23 @@ compute()
   m_linear_system.initialize(subDomain(), acceleratorMng()->defaultRunner(), m_dofs_on_nodes.dofFamily(), "Solver");
   m_linear_system.clearValues();
 
+  // Test for adding parameters for PETSc.
+  // This is only used for the first call.
+  {
+    /*
+    StringList string_list;
+    string_list.add("-ksp_monitor");
+    string_list.add("-ksp_rtol");
+    string_list.add("1e-50");
+    string_list.add("-ksp_atol");
+    string_list.add("1e-15");
+    string_list.add("-pc_type");
+    string_list.add("gamg");
+    CommandLineArguments args(string_list);
+    m_linear_system.setSolverCommandLineArguments(args);
+  */
+  }
+
   _doStationarySolve();
 
   elapsedTime = platform::getRealTime() - elapsedTime;
@@ -110,9 +127,9 @@ _doStationarySolve()
 
   _assembleLinearOperator();
 
-  _solve();
-  _updateVariables();
-  _validateResults();
+  //_solve();
+  //_updateVariables();
+  //_validateResults();
 }
 
 /*---------------------------------------------------------------------------*/

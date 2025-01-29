@@ -24,6 +24,7 @@
 #include <arcane/accelerator/core/RunQueue.h>
 #include <arcane/core/ItemTypes.h>
 #include <arccore/base/ArccoreGlobal.h>
+#include <arcane/utils/StringList.h>
 
 #include "IDoFLinearSystemFactory.h"
 #include "Fem_axl.h"
